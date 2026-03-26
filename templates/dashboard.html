@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedStar Instagram Monitor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0f1117;
+            --bg-secondary: #1a1d27;
+            --bg-card: #222533;
+            --bg-hover: #2a2e3f;
+            --accent: #6c5ce7;
+            --accent-light: #a29bfe;
+            --accent-glow: rgba(108, 92, 231, 0.3);
+            --green: #00cec9;
+            --green-glow: rgba(0, 206, 201, 0.3);
+            --red: #ff6b6b;
+            --orange: #fdcb6e;
+            --pink: #fd79a8;
+            --text-primary: #e8e8ee;
+            --text-secondary: #8b8da3;
+            --text-muted: #5f6180;
+            --border: #2d3045;
+            --radius: 12px;
+            --shadow: 0 4px 24px rgba(0,0,0,0.3);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        /* ── Sidebar ── */
+        .sidebar {
+            position: fixed; left: 0; top: 0; bottom: 0;
+            width: 240px; background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            display: flex; flex-direction: column;
+            z-index: 100;
+        }
+        .sidebar-logo {
+            padding: 24px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        .sidebar-logo h1 {
+            font-size: 18px; font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-light), var(--green));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .sidebar-logo span { font-size: 11px; color: var(--text-muted); display: block; margin-top: 2px; }
+        .sidebar-nav { flex: 1; padding: 16px 12px; }
+        .nav-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 12px; border-radius: 8px;
+            color: var(--text-secondary); cursor: pointer;
+            font-size: 14px; transition: all 0.2s;
+            margin-bottom: 2px;
+        }
+        .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .nav-item.active {
+            background: var(--accent); color: white;
+            box-shadow: 0 2px 12px var(--accent-glow);
+        }
+        .nav-icon { font-size: 18px; width: 24px; text-align: center; }
+
+        /* ── Main Content ── */
+        .main { margin-left: 240px; padding: 24px 32px; }
+
+        .page-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 24px;
+        }
+        .page-header h2 { font-size: 24px; font-weight: 700; }
+
+        /* ── Cards ── */
+        .stat-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px; margin-bottom: 24px;
+        }
+        .stat-card {
+            background: var(--bg-card); border-radius: var(--radius);
+            padding: 20px; border: 1px solid var(--border);
+        }
+        .stat-card .label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-card .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+        .stat-card .sub { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+        .stat-card.accent .value { color: var(--accent-light); }
+        .stat-card.green .value { color: var(--green); }
+        .stat-card.pink .value { color: var(--pink); }
+        .stat-card.orange .value { color: var(--orange); }
+
+        /* ── Section panels ── */
+        .panel {
+            background: var(--bg-card); border-radius: var(--radius);
+            border: 1px solid var(--border); margin-bottom: 24px;
+            overflow: hidden;
+        }
+        .panel-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 16px 20px; border-bottom: 1px solid var(--border);
+        }
+        .panel-header h3 { font-size: 16px; font-weight: 600; }
+        .panel-body { padding: 20px; }
+
+        /* ── Buttons ── */
+        .btn {
+            padding: 8px 16px; border-radius: 8px; border: none;
+            font-size: 13px; font-weight: 600; cursor: pointer;
+            transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px;
+        }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:hover { background: #5b4bd5; box-shadow: 0 2px 12px var(--accent-glow); }
+        .btn-secondary { background: var(--bg-hover); color: var(--text-primary); border: 1px solid var(--border); }
+        .btn-secondary:hover { background: var(--border); }
+        .btn-danger { background: var(--red); color: white; }
+        .btn-danger:hover { opacity: 0.85; }
+        .btn-sm { padding: 5px 10px; font-size: 12px; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* ── Inputs ── */
+        .input-group { display: flex; gap: 8px; }
+        input[type="text"], select {
+            background: var(--bg-primary); border: 1px solid var(--border);
+            color: var(--text-primary); padding: 8px 12px; border-radius: 8px;
+            font-size: 13px; outline: none; transition: border 0.2s;
+        }
+        input[type="text"]:focus, select:focus { border-color: var(--accent); }
+        input[type="text"]::placeholder { color: var(--text-muted); }
+
+        /* ── Table ── */
+        .data-table { width: 100%; border-collapse: collapse; }
+        .data-table th {
+            text-align: left; padding: 10px 12px;
+            font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+            color: var(--text-muted); border-bottom: 1px solid var(--border);
+            cursor: pointer; user-select: none;
+        }
+        .data-table th:hover { color: var(--text-secondary); }
+        .data-table td {
+            padding: 12px; font-size: 13px;
+            border-bottom: 1px solid rgba(45,48,69,0.5);
+            vertical-align: middle;
+        }
+        .data-table tr:hover td { background: var(--bg-hover); }
+
+        /* ── Post row elements ── */
+        .profile-cell { display: flex; align-items: center; gap: 10px; }
+        .profile-avatar {
+            width: 32px; height: 32px; border-radius: 50%;
+            background: var(--bg-primary); flex-shrink: 0;
+            overflow: hidden;
+        }
+        .profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .profile-name { font-weight: 600; font-size: 13px; }
+        .profile-handle { color: var(--text-muted); font-size: 11px; }
+        .badge {
+            display: inline-block; padding: 2px 8px; border-radius: 20px;
+            font-size: 11px; font-weight: 600;
+        }
+        .badge-video { background: rgba(253,121,168,0.15); color: var(--pink); }
+        .badge-image { background: rgba(108,92,231,0.15); color: var(--accent-light); }
+        .badge-carousel { background: rgba(0,206,201,0.15); color: var(--green); }
+        .badge-verified { color: #3897f0; font-size: 14px; }
+
+        .metric { font-weight: 600; }
+        .metric-high { color: var(--green); }
+        .metric-medium { color: var(--orange); }
+        .metric-low { color: var(--text-secondary); }
+
+        .caption-preview {
+            max-width: 280px; overflow: hidden; text-overflow: ellipsis;
+            white-space: nowrap; color: var(--text-secondary); font-size: 12px;
+        }
+        .hook-text {
+            font-size: 14px; font-weight: 500; line-height: 1.4;
+            color: var(--text-primary);
+        }
+
+        /* ── Charts ── */
+        .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+        .chart-container { position: relative; height: 300px; }
+
+        /* ── Tabs ── */
+        .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+        .tab {
+            padding: 6px 14px; border-radius: 6px; font-size: 13px;
+            cursor: pointer; color: var(--text-secondary); background: transparent;
+            border: none; transition: all 0.2s;
+        }
+        .tab.active { background: var(--accent); color: white; }
+        .tab:hover:not(.active) { background: var(--bg-hover); }
+
+        /* ── Filters bar ── */
+        .filters-bar {
+            display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+
+        /* ── Page sections (hidden by default) ── */
+        .page-section { display: none; }
+        .page-section.active { display: block; }
+
+        /* ── Modal ── */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+            display: none; justify-content: center; align-items: center;
+            z-index: 200;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: var(--bg-card); border-radius: var(--radius);
+            border: 1px solid var(--border); width: 480px; max-width: 90vw;
+            box-shadow: var(--shadow);
+        }
+        .modal-header {
+            padding: 16px 20px; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .modal-header h3 { font-size: 16px; }
+        .modal-close {
+            background: none; border: none; color: var(--text-muted);
+            font-size: 20px; cursor: pointer;
+        }
+        .modal-body { padding: 20px; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label {
+            display: block; font-size: 12px; font-weight: 600;
+            color: var(--text-secondary); margin-bottom: 6px;
+        }
+        .form-group input, .form-group select { width: 100%; }
+
+        /* ── Toast ── */
+        .toast-container { position: fixed; top: 20px; right: 20px; z-index: 300; }
+        .toast {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 12px 16px; margin-bottom: 8px;
+            font-size: 13px; box-shadow: var(--shadow);
+            animation: slideIn 0.3s ease;
+        }
+        .toast.success { border-left: 3px solid var(--green); }
+        .toast.error { border-left: 3px solid var(--red); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } }
+
+        /* ── Loading spinner ── */
+        .spinner {
+            display: inline-block; width: 16px; height: 16px;
+            border: 2px solid var(--border); border-top-color: var(--accent);
+            border-radius: 50%; animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Progress bar ── */
+        .progress-bar {
+            height: 4px; background: var(--bg-primary); border-radius: 2px;
+            overflow: hidden; margin-top: 8px;
+        }
+        .progress-fill {
+            height: 100%; background: linear-gradient(90deg, var(--accent), var(--green));
+            border-radius: 2px; transition: width 0.3s ease;
+        }
+
+        /* ── Scrollbar ── */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-primary); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        /* ── Responsive ── */
+        @media (max-width: 900px) {
+            .sidebar { width: 60px; }
+            .sidebar-logo h1, .sidebar-logo span, .nav-item span { display: none; }
+            .main { margin-left: 60px; padding: 16px; }
+            .chart-grid { grid-template-columns: 1fr; }
+        }
+
+        .empty-state {
+            text-align: center; padding: 60px 20px; color: var(--text-muted);
+        }
+        .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+        .empty-state p { font-size: 14px; margin-bottom: 16px; }
+
+        .link { color: var(--accent-light); text-decoration: none; }
+        .link:hover { text-decoration: underline; }
+
+        .scrape-status {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 13px; color: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<nav class="sidebar">
+    <div class="sidebar-logo">
+        <h1>MedStar Monitor</h1>
+        <span>Instagram Analytics</span>
+    </div>
+    <div class="sidebar-nav">
+        <div class="nav-item active" onclick="showPage('overview')">
+            <span class="nav-icon">📊</span> <span>Overview</span>
+        </div>
+        <div class="nav-item" onclick="showPage('top-posts')">
+            <span class="nav-icon">🔥</span> <span>Top Posts</span>
+        </div>
+        <div class="nav-item" onclick="showPage('hooks')">
+            <span class="nav-icon">🎣</span> <span>Hooks & Captions</span>
+        </div>
+        <div class="nav-item" onclick="showPage('profiles')">
+            <span class="nav-icon">👥</span> <span>Profiles</span>
+        </div>
+        <div class="nav-item" onclick="showPage('all-posts')">
+            <span class="nav-icon">📋</span> <span>All Posts</span>
+        </div>
+    </div>
+</nav>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Add Profile Modal -->
+<div class="modal-overlay" id="addProfileModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Add Instagram Profile</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Instagram Username</label>
+                <input type="text" id="newUsername" placeholder="e.g. garyvee" />
+            </div>
+            <div class="form-group">
+                <label>Category</label>
+                <select id="newCategory">
+                    <option value="Uncategorized">Uncategorized</option>
+                    <option value="Health & Wellness">Health & Wellness</option>
+                    <option value="Fitness">Fitness</option>
+                    <option value="Nutrition">Nutrition</option>
+                    <option value="Medical">Medical</option>
+                    <option value="Mental Health">Mental Health</option>
+                    <option value="Business">Business</option>
+                    <option value="Lifestyle">Lifestyle</option>
+                    <option value="Education">Education</option>
+                    <option value="Competitor">Competitor</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="addProfile()">Add & Scrape</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Content -->
+<div class="main">
+
+    <!-- ═══ OVERVIEW PAGE ═══ -->
+    <div class="page-section active" id="page-overview">
+        <div class="page-header">
+            <h2>Dashboard Overview</h2>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <div class="scrape-status" id="scrapeStatus"></div>
+                <button class="btn btn-primary" onclick="scrapeAll()" id="btnScrapeAll">
+                    🔄 Scrape All Profiles
+                </button>
+            </div>
+        </div>
+
+        <div class="stat-grid" id="statCards">
+            <div class="stat-card accent">
+                <div class="label">Profiles Tracked</div>
+                <div class="value" id="statProfiles">—</div>
+            </div>
+            <div class="stat-card green">
+                <div class="label">Posts Collected</div>
+                <div class="value" id="statPosts">—</div>
+            </div>
+            <div class="stat-card pink">
+                <div class="label">Avg Engagement Rate</div>
+                <div class="value" id="statEngagement">—</div>
+            </div>
+            <div class="stat-card orange">
+                <div class="label">Top Post Likes</div>
+                <div class="value" id="statTopLikes">—</div>
+                <div class="sub" id="statTopBy">—</div>
+            </div>
+        </div>
+
+        <div class="chart-grid">
+            <div class="panel">
+                <div class="panel-header"><h3>Engagement by Profile</h3></div>
+                <div class="panel-body"><div class="chart-container"><canvas id="chartEngagement"></canvas></div></div>
+            </div>
+            <div class="panel">
+                <div class="panel-header"><h3>Post Types Distribution</h3></div>
+                <div class="panel-body"><div class="chart-container"><canvas id="chartTypes"></canvas></div></div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <h3>🔥 Top 5 Performing Posts</h3>
+                <button class="btn btn-secondary btn-sm" onclick="showPage('top-posts')">View All →</button>
+            </div>
+            <div class="panel-body" id="overviewTopPosts">
+                <div class="empty-state"><div class="spinner"></div><p>Loading...</p></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ TOP POSTS PAGE ═══ -->
+    <div class="page-section" id="page-top-posts">
+        <div class="page-header">
+            <h2>Top Performing Posts</h2>
+        </div>
+        <div class="filters-bar">
+            <select id="topMetric" onchange="loadTopPosts()">
+                <option value="engagement_rate">Sort by Engagement Rate</option>
+                <option value="likes">Sort by Likes</option>
+                <option value="comments">Sort by Comments</option>
+                <option value="video_views">Sort by Video Views</option>
+            </select>
+            <select id="topDays" onchange="loadTopPosts()">
+                <option value="7">Last 7 Days</option>
+                <option value="30" selected>Last 30 Days</option>
+                <option value="90">Last 90 Days</option>
+                <option value="365">Last Year</option>
+                <option value="3650">All Time</option>
+            </select>
+            <select id="topLimit" onchange="loadTopPosts()">
+                <option value="20">Top 20</option>
+                <option value="50">Top 50</option>
+                <option value="100">Top 100</option>
+            </select>
+        </div>
+        <div class="panel">
+            <div class="panel-body" id="topPostsTable">
+                <div class="empty-state"><div class="spinner"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ HOOKS PAGE ═══ -->
+    <div class="page-section" id="page-hooks">
+        <div class="page-header">
+            <h2>Hooks & Caption Analysis</h2>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">
+            The opening lines of the highest-performing posts — use these as inspiration for your own content hooks.
+        </p>
+        <div class="filters-bar">
+            <select id="hookDays" onchange="loadHooks()">
+                <option value="7">Last 7 Days</option>
+                <option value="30" selected>Last 30 Days</option>
+                <option value="90">Last 90 Days</option>
+                <option value="365">Last Year</option>
+                <option value="3650">All Time</option>
+            </select>
+        </div>
+        <div class="panel">
+            <div class="panel-body" id="hooksTable">
+                <div class="empty-state"><div class="spinner"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ PROFILES PAGE ═══ -->
+    <div class="page-section" id="page-profiles">
+        <div class="page-header">
+            <h2>Monitored Profiles</h2>
+            <button class="btn btn-primary" onclick="openModal()">+ Add Profile</button>
+        </div>
+        <div class="panel">
+            <div class="panel-body" id="profilesTable">
+                <div class="empty-state">
+                    <div class="icon">👥</div>
+                    <p>No profiles added yet. Add your first Instagram profile to start monitoring.</p>
+                    <button class="btn btn-primary" onclick="openModal()">+ Add Profile</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ ALL POSTS PAGE ═══ -->
+    <div class="page-section" id="page-all-posts">
+        <div class="page-header">
+            <h2>All Posts</h2>
+        </div>
+        <div class="filters-bar">
+            <input type="text" id="searchInput" placeholder="Search captions or hashtags..." style="width: 250px;" oninput="debounceLoadPosts()" />
+            <select id="filterProfile" onchange="loadAllPosts()">
+                <option value="">All Profiles</option>
+            </select>
+            <select id="filterType" onchange="loadAllPosts()">
+                <option value="">All Types</option>
+                <option value="image">Image</option>
+                <option value="video">Video / Reel</option>
+                <option value="carousel">Carousel</option>
+            </select>
+            <select id="sortBy" onchange="loadAllPosts()">
+                <option value="engagement_rate">Engagement Rate</option>
+                <option value="likes">Likes</option>
+                <option value="comments">Comments</option>
+                <option value="video_views">Video Views</option>
+                <option value="posted_at">Date Posted</option>
+            </select>
+            <select id="filterDays" onchange="loadAllPosts()">
+                <option value="">All Time</option>
+                <option value="7">Last 7 Days</option>
+                <option value="30">Last 30 Days</option>
+                <option value="90">Last 90 Days</option>
+            </select>
+        </div>
+        <div class="panel">
+            <div class="panel-body" id="allPostsTable">
+                <div class="empty-state"><div class="spinner"></div></div>
+            </div>
+        </div>
+        <div style="display: flex; justify-content: center; gap: 8px; margin-top: 12px;" id="pagination"></div>
+    </div>
+</div>
+
+<script>
+// ─── State ───
+let currentPage = 'overview';
+let postsOffset = 0;
+const POSTS_LIMIT = 50;
+let searchTimer = null;
+let chartEngagement = null;
+let chartTypes = null;
+
+// ─── Navigation ───
+function showPage(page) {
+    document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('page-' + page).classList.add('active');
+    document.querySelectorAll('.nav-item')[
+        ['overview','top-posts','hooks','profiles','all-posts'].indexOf(page)
+    ].classList.add('active');
+    currentPage = page;
+
+    if (page === 'overview') loadOverview();
+    if (page === 'top-posts') loadTopPosts();
+    if (page === 'hooks') loadHooks();
+    if (page === 'profiles') loadProfiles();
+    if (page === 'all-posts') loadAllPosts();
+}
+
+// ─── Toast notifications ───
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = 'toast ' + type;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
+}
+
+// ─── Modal ───
+function openModal() { document.getElementById('addProfileModal').classList.add('show'); }
+function closeModal() { document.getElementById('addProfileModal').classList.remove('show'); }
+
+// ─── Formatting helpers ───
+function formatNumber(n) {
+    if (n == null) return '0';
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return n.toLocaleString();
+}
+
+function engagementColor(rate) {
+    if (rate >= 3) return 'metric-high';
+    if (rate >= 1) return 'metric-medium';
+    return 'metric-low';
+}
+
+function typeBadge(type) {
+    const classes = { video: 'badge-video', image: 'badge-image', carousel: 'badge-carousel' };
+    return `<span class="badge ${classes[type] || 'badge-image'}">${type}</span>`;
+}
+
+function timeAgo(dateStr) {
+    if (!dateStr) return '';
+    const now = new Date();
+    const d = new Date(dateStr);
+    const diff = Math.floor((now - d) / 1000);
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    if (diff < 2592000) return Math.floor(diff / 86400) + 'd ago';
+    return d.toLocaleDateString();
+}
+
+function truncate(str, len = 80) {
+    if (!str) return '';
+    return str.length > len ? str.substring(0, len) + '...' : str;
+}
+
+// ─── API helpers ───
+async function api(url, options = {}) {
+    try {
+        const res = await fetch(url, {
+            headers: { 'Content-Type': 'application/json' },
+            ...options,
+            body: options.body ? JSON.stringify(options.body) : undefined
+        });
+        return await res.json();
+    } catch (e) {
+        console.error('API error:', e);
+        showToast('Network error', 'error');
+        return null;
+    }
+}
+
+// ─── Add Profile ───
+async function addProfile() {
+    const username = document.getElementById('newUsername').value.trim().replace('@', '');
+    const category = document.getElementById('newCategory').value;
+    if (!username) return showToast('Please enter a username', 'error');
+
+    closeModal();
+    showToast(`Adding @${username}...`);
+
+    const result = await api('/api/profiles', { method: 'POST', body: { username, category } });
+    if (result && !result.error) {
+        showToast(`@${username} added! Scraping posts...`);
+        const scrapeResult = await api(`/api/profiles/${username}/scrape`, { method: 'POST', body: { max_posts: 30 } });
+        if (scrapeResult && !scrapeResult.error) {
+            showToast(`Scraped ${scrapeResult.posts_count} posts from @${username}`);
+        }
+        loadProfiles();
+        loadOverview();
+    } else {
+        showToast(result?.error || 'Failed to add profile', 'error');
+    }
+    document.getElementById('newUsername').value = '';
+}
+
+// ─── Remove Profile ───
+async function deleteProfile(username) {
+    if (!confirm(`Remove @${username} and all their tracked posts?`)) return;
+    const result = await api(`/api/profiles/${username}`, { method: 'DELETE' });
+    if (result && !result.error) {
+        showToast(`@${username} removed`);
+        loadProfiles();
+        loadOverview();
+    }
+}
+
+// ─── Scrape single profile ───
+async function scrapeOne(username) {
+    showToast(`Scraping @${username}...`);
+    const result = await api(`/api/profiles/${username}/scrape`, { method: 'POST', body: { max_posts: 30 } });
+    if (result && !result.error) {
+        showToast(`Scraped ${result.posts_count} posts from @${username}`);
+        loadOverview();
+    } else {
+        showToast(result?.error || 'Scrape failed', 'error');
+    }
+}
+
+// ─── Scrape All ───
+async function scrapeAll() {
+    const btn = document.getElementById('btnScrapeAll');
+    btn.disabled = true;
+    const result = await api('/api/scrape-all', { method: 'POST' });
+    if (result && !result.error) {
+        showToast('Scraping started in background...');
+        pollScrapeStatus();
+    } else {
+        showToast(result?.error || 'Failed', 'error');
+        btn.disabled = false;
+    }
+}
+
+async function pollScrapeStatus() {
+    const statusEl = document.getElementById('scrapeStatus');
+    const btn = document.getElementById('btnScrapeAll');
+
+    const poll = async () => {
+        const status = await api('/api/scrape-status');
+        if (!status) return;
+
+        if (status.running) {
+            statusEl.innerHTML = `<span class="spinner"></span> ${status.message} (${status.progress}/${status.total})`;
+            setTimeout(poll, 2000);
+        } else {
+            statusEl.innerHTML = '';
+            btn.disabled = false;
+            showToast('Scraping complete!');
+            loadOverview();
+        }
+    };
+    poll();
+}
+
+// ─── Load Overview ───
+async function loadOverview() {
+    const stats = await api('/api/stats');
+    if (!stats) return;
+
+    document.getElementById('statProfiles').textContent = stats.total_profiles;
+    document.getElementById('statPosts').textContent = formatNumber(stats.total_posts);
+    document.getElementById('statEngagement').textContent = stats.avg_engagement_rate.toFixed(2) + '%';
+
+    if (stats.top_post) {
+        document.getElementById('statTopLikes').textContent = formatNumber(stats.top_post.likes);
+        document.getElementById('statTopBy').textContent = `by @${stats.top_post.username}`;
+    }
+
+    // Engagement chart
+    if (stats.profiles_stats && stats.profiles_stats.length > 0) {
+        const labels = stats.profiles_stats.map(p => '@' + p.username);
+        const data = stats.profiles_stats.map(p => p.avg_engagement || 0);
+
+        if (chartEngagement) chartEngagement.destroy();
+        chartEngagement = new Chart(document.getElementById('chartEngagement'), {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Avg Engagement %',
+                    data,
+                    backgroundColor: 'rgba(108, 92, 231, 0.6)',
+                    borderColor: '#6c5ce7',
+                    borderWidth: 1,
+                    borderRadius: 6,
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { color: '#8b8da3', font: { size: 11 } }, grid: { display: false } },
+                    y: { ticks: { color: '#8b8da3', callback: v => v + '%' }, grid: { color: 'rgba(45,48,69,0.5)' } }
+                }
+            }
+        });
+    }
+
+    // Post types chart
+    if (stats.post_types && Object.keys(stats.post_types).length > 0) {
+        if (chartTypes) chartTypes.destroy();
+        chartTypes = new Chart(document.getElementById('chartTypes'), {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(stats.post_types).map(t => t.charAt(0).toUpperCase() + t.slice(1)),
+                datasets: [{
+                    data: Object.values(stats.post_types),
+                    backgroundColor: ['rgba(108,92,231,0.7)', 'rgba(253,121,168,0.7)', 'rgba(0,206,201,0.7)'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom', labels: { color: '#8b8da3' } } }
+            }
+        });
+    }
+
+    // Top 5 posts
+    const top = await api('/api/top-posts?limit=5&days=3650');
+    const container = document.getElementById('overviewTopPosts');
+    if (top && top.length > 0) {
+        container.innerHTML = renderPostsTable(top, true);
+    } else {
+        container.innerHTML = '<div class="empty-state"><div class="icon">📊</div><p>No posts yet. Add profiles and scrape to see top performers here.</p></div>';
+    }
+}
+
+// ─── Render posts table ───
+function renderPostsTable(posts, compact = false) {
+    if (!posts || posts.length === 0) {
+        return '<div class="empty-state"><p>No posts found</p></div>';
+    }
+
+    let html = `<table class="data-table">
+        <thead><tr>
+            <th>#</th>
+            <th>Profile</th>
+            <th>Type</th>
+            <th>Caption</th>
+            <th>Likes</th>
+            <th>Comments</th>
+            ${!compact ? '<th>Views</th>' : ''}
+            <th>Eng. Rate</th>
+            <th>Posted</th>
+            <th>Link</th>
+        </tr></thead><tbody>`;
+
+    posts.forEach((p, i) => {
+        html += `<tr>
+            <td style="color: var(--text-muted)">${i + 1}</td>
+            <td>
+                <div class="profile-cell">
+                    <div>
+                        <div class="profile-name">@${p.username} ${p.is_verified ? '<span class="badge-verified">✓</span>' : ''}</div>
+                        <div class="profile-handle">${formatNumber(p.follower_count)} followers</div>
+                    </div>
+                </div>
+            </td>
+            <td>${typeBadge(p.post_type)}</td>
+            <td><div class="caption-preview" title="${(p.caption||'').replace(/"/g, '&quot;')}">${truncate(p.caption, 60)}</div></td>
+            <td class="metric">${formatNumber(p.likes)}</td>
+            <td class="metric">${formatNumber(p.comments)}</td>
+            ${!compact ? `<td class="metric">${p.is_video ? formatNumber(p.video_views) : '—'}</td>` : ''}
+            <td class="metric ${engagementColor(p.engagement_rate)}">${p.engagement_rate.toFixed(2)}%</td>
+            <td style="color: var(--text-secondary); font-size: 12px">${timeAgo(p.posted_at)}</td>
+            <td><a href="${p.post_url}" target="_blank" class="link">View ↗</a></td>
+        </tr>`;
+    });
+
+    html += '</tbody></table>';
+    return html;
+}
+
+// ─── Load Top Posts ───
+async function loadTopPosts() {
+    const metric = document.getElementById('topMetric').value;
+    const days = document.getElementById('topDays').value;
+    const limit = document.getElementById('topLimit').value;
+
+    const posts = await api(`/api/top-posts?metric=${metric}&days=${days}&limit=${limit}`);
+    document.getElementById('topPostsTable').innerHTML = renderPostsTable(posts);
+}
+
+// ─── Load Hooks ───
+async function loadHooks() {
+    const days = document.getElementById('hookDays').value;
+    const hooks = await api(`/api/hooks?days=${days}&limit=30`);
+    const container = document.getElementById('hooksTable');
+
+    if (!hooks || hooks.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>No hooks found. Scrape profiles to analyze caption hooks.</p></div>';
+        return;
+    }
+
+    let html = '<table class="data-table"><thead><tr><th>#</th><th>Hook (Opening Line)</th><th>Profile</th><th>Eng. Rate</th><th>Likes</th><th>Type</th><th>Link</th></tr></thead><tbody>';
+    hooks.forEach((h, i) => {
+        html += `<tr>
+            <td style="color: var(--text-muted)">${i + 1}</td>
+            <td><div class="hook-text" style="max-width:400px">${truncate(h.hook, 120)}</div></td>
+            <td><div class="profile-name">@${h.username}</div><div class="profile-handle">${formatNumber(h.follower_count)} followers</div></td>
+            <td class="metric ${engagementColor(h.engagement_rate)}">${h.engagement_rate.toFixed(2)}%</td>
+            <td class="metric">${formatNumber(h.likes)}</td>
+            <td>${typeBadge(h.post_type)}</td>
+            <td><a href="${h.post_url}" target="_blank" class="link">View ↗</a></td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+// ─── Load Profiles ───
+async function loadProfiles() {
+    const profiles = await api('/api/profiles');
+    const container = document.getElementById('profilesTable');
+
+    // Also populate the profile filter dropdown
+    const filterEl = document.getElementById('filterProfile');
+    if (filterEl) {
+        filterEl.innerHTML = '<option value="">All Profiles</option>';
+        (profiles || []).forEach(p => {
+            filterEl.innerHTML += `<option value="${p.username}">@${p.username}</option>`;
+        });
+    }
+
+    if (!profiles || profiles.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="icon">👥</div><p>No profiles added yet. Add your first Instagram profile to start monitoring.</p><button class="btn btn-primary" onclick="openModal()">+ Add Profile</button></div>';
+        return;
+    }
+
+    let html = '<table class="data-table"><thead><tr><th>Profile</th><th>Category</th><th>Followers</th><th>Posts Scraped</th><th>Avg Engagement</th><th>Best Post Likes</th><th>Last Scraped</th><th>Actions</th></tr></thead><tbody>';
+    profiles.forEach(p => {
+        html += `<tr>
+            <td>
+                <div class="profile-cell">
+                    <div>
+                        <div class="profile-name">@${p.username} ${p.is_verified ? '<span class="badge-verified">✓</span>' : ''}</div>
+                        <div class="profile-handle">${p.full_name || ''}</div>
+                    </div>
+                </div>
+            </td>
+            <td><span class="badge badge-image">${p.category || 'Uncategorized'}</span></td>
+            <td class="metric">${formatNumber(p.follower_count)}</td>
+            <td>${p.total_posts_scraped || 0}</td>
+            <td class="metric ${engagementColor(p.avg_engagement)}">${(p.avg_engagement || 0).toFixed(2)}%</td>
+            <td class="metric">${formatNumber(p.max_likes)}</td>
+            <td style="color: var(--text-secondary); font-size: 12px">${p.last_scraped ? timeAgo(p.last_scraped) : 'Never'}</td>
+            <td>
+                <div style="display:flex; gap:4px">
+                    <button class="btn btn-secondary btn-sm" onclick="scrapeOne('${p.username}')">🔄 Scrape</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteProfile('${p.username}')">✕</button>
+                </div>
+            </td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+// ─── Load All Posts ───
+async function loadAllPosts() {
+    const profile = document.getElementById('filterProfile').value;
+    const type = document.getElementById('filterType').value;
+    const sort = document.getElementById('sortBy').value;
+    const search = document.getElementById('searchInput').value;
+    const days = document.getElementById('filterDays').value;
+
+    const params = new URLSearchParams({
+        sort, order: 'DESC', limit: POSTS_LIMIT, offset: postsOffset
+    });
+    if (profile) params.set('profile', profile);
+    if (type) params.set('type', type);
+    if (search) params.set('search', search);
+    if (days) params.set('days', days);
+
+    const result = await api('/api/posts?' + params);
+    if (!result) return;
+
+    document.getElementById('allPostsTable').innerHTML = renderPostsTable(result.posts);
+
+    // Pagination
+    const totalPages = Math.ceil(result.total / POSTS_LIMIT);
+    const currentPg = Math.floor(postsOffset / POSTS_LIMIT) + 1;
+    let pagHtml = '';
+    if (totalPages > 1) {
+        pagHtml += `<button class="btn btn-secondary btn-sm" ${currentPg <= 1 ? 'disabled' : ''} onclick="goToPage(${currentPg - 1})">← Prev</button>`;
+        pagHtml += `<span style="color: var(--text-secondary); font-size: 13px; padding: 0 8px;">Page ${currentPg} of ${totalPages} (${result.total} posts)</span>`;
+        pagHtml += `<button class="btn btn-secondary btn-sm" ${currentPg >= totalPages ? 'disabled' : ''} onclick="goToPage(${currentPg + 1})">Next →</button>`;
+    }
+    document.getElementById('pagination').innerHTML = pagHtml;
+}
+
+function goToPage(page) {
+    postsOffset = (page - 1) * POSTS_LIMIT;
+    loadAllPosts();
+}
+
+function debounceLoadPosts() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { postsOffset = 0; loadAllPosts(); }, 400);
+}
+
+// ─── Init ───
+document.addEventListener('DOMContentLoaded', () => {
+    loadOverview();
+    loadProfiles(); // pre-populate filter dropdown
+});
+</script>
+</body>
+</html>
