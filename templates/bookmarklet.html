@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedStar Scraper Bookmarklet</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; padding: 40px 20px; line-height: 1.6; }
+        .container { max-width: 720px; margin: 0 auto; }
+        h1 { font-size: 28px; margin-bottom: 8px; color: #f8fafc; }
+        .subtitle { color: #94a3b8; margin-bottom: 32px; }
+        .step { background: #1e293b; border-radius: 12px; padding: 24px; margin-bottom: 20px; border: 1px solid #334155; }
+        .step-number { display: inline-block; background: #6366f1; color: white; width: 28px; height: 28px; border-radius: 50%; text-align: center; line-height: 28px; font-weight: 700; font-size: 14px; margin-right: 10px; }
+        .step h2 { display: inline; font-size: 18px; color: #f1f5f9; }
+        .step p { margin-top: 12px; color: #cbd5e1; }
+        .bookmarklet-link { display: inline-block; margin-top: 16px; padding: 14px 28px; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; text-decoration: none; border-radius: 10px; font-weight: 600; font-size: 16px; cursor: grab; transition: transform 0.15s; box-shadow: 0 4px 14px rgba(99,102,241,0.4); }
+        .bookmarklet-link:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(99,102,241,0.5); }
+        .bookmarklet-link:active { cursor: grabbing; }
+        .hint { background: #1a1a2e; border: 1px dashed #4f46e5; border-radius: 8px; padding: 14px 18px; margin-top: 14px; font-size: 14px; color: #a5b4fc; }
+        code { background: #334155; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #e0e7ff; }
+        .back-link { display: inline-block; margin-top: 32px; color: #818cf8; text-decoration: none; font-size: 14px; }
+        .back-link:hover { text-decoration: underline; }
+        .warning { background: #422006; border: 1px solid #92400e; border-radius: 8px; padding: 14px 18px; margin-top: 14px; font-size: 14px; color: #fbbf24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 MedStar Scraper Tool</h1>
+        <p class="subtitle">Drag the button below to your bookmarks bar to scrape Instagram profiles right from your browser.</p>
+
+        <div class="step">
+            <span class="step-number">1</span>
+            <h2>Show your Bookmarks Bar</h2>
+            <p>Press <code>Ctrl+Shift+B</code> (Windows) or <code>⌘+Shift+B</code> (Mac) to show the bookmarks bar in Chrome.</p>
+        </div>
+
+        <div class="step">
+            <span class="step-number">2</span>
+            <h2>Drag this button to your bookmarks bar</h2>
+            <p>Click and drag the purple button below up to your bookmarks bar:</p>
+            <a class="bookmarklet-link" href="javascript:void(function(){var s=document.createElement('script');s.src='{{ dashboard_url }}/scraper.js?t='+Date.now();document.head.appendChild(s)})()">
+                📊 Scrape to MedStar
+            </a>
+            <div class="hint">💡 Tip: Don't click it here — <strong>drag it</strong> to your bookmarks bar! Then use it on any Instagram profile page.</div>
+        </div>
+
+        <div class="step">
+            <span class="step-number">3</span>
+            <h2>Use it on any Instagram profile</h2>
+            <p>Go to any Instagram profile page (e.g. <code>instagram.com/garyvee</code>) and click the <strong>"📊 Scrape to MedStar"</strong> bookmark. It will:</p>
+            <p style="margin-top:8px;">✅ Fetch the profile info and latest 30 posts<br>✅ Send them to your MedStar dashboard<br>✅ Auto-add the profile if it's new<br>✅ Redirect you to the dashboard when done</p>
+        </div>
+
+        <div class="step">
+            <span class="step-number">!</span>
+            <h2>Important Notes</h2>
+            <div class="warning">
+                <strong>You must be logged into Instagram</strong> in the same browser for this to work. The bookmarklet uses your logged-in session to access the data.
+            </div>
+            <p style="margin-top:12px;">If you see an error about "Login required", make sure you're signed into Instagram in that browser tab first.</p>
+        </div>
+
+        <a class="back-link" href="/">← Back to Dashboard</a>
+    </div>
+</body>
+</html>

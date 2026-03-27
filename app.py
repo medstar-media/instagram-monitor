@@ -391,14 +391,154 @@ def browser_scrape():
     The browser fetches Instagram data (using its own cookies) and POSTs here."""
     if request.method == "OPTIONS":
         return "", 204
-    data = request.json
+
+    # Support both JSON and form-encoded data (form POST bypasses CORS)
+    if request.content_type and "application/json" in request.content_type:
+        data = request.json
+    elif request.form.get("payload"):
+        try:
+            data = json.loads(request.form["payload"])
+        except Exception:
+            return jsonify({"error": "Invalid form payload"}), 400
+    else:
+        return jsonify({"error": "No data received"}), 400
+
     if not data:
         return jsonify({"error": "No data received"}), 400
     result = data.get("result")
     if not result or not result.get("success"):
         return jsonify({"error": "Invalid scrape result"}), 400
+
+    # Auto-add profile if it doesn't exist
+    username = result["profile"]["username"]
+    add_profile(username)
+
     save_scrape_results(result)
-    return jsonify({"message": f"Saved {len(result.get('posts', []))} posts for @{result['profile']['username']}"})
+    msg = f"Saved {len(result.get('posts', []))} posts for @{username}"
+
+    # If form submission, redirect back to dashboard
+    if request.form.get("payload"):
+        return redirect(f"/?scraped={username}&posts={len(result.get('posts', []))}")
+
+    return jsonify({"message": msg})
+
+
+@app.route("/bookmarklet")
+def bookmarklet_page():
+    """Page with the scraper bookmarklet for team members."""
+    dashboard_url = request.url_root.rstrip("/")
+    return render_template("bookmarklet.html", dashboard_url=dashboard_url)
+
+
+@app.route("/scraper.js")
+def scraper_js():
+    """Serve the bookmarklet scraper script. Loaded inline by the bookmarklet."""
+    dashboard_url = request.url_root.rstrip("/")
+    js = f"""
+(function(){{
+  var DASH='{dashboard_url}';
+  var path=window.location.pathname.replace(/\\//g,'');
+  if(window.location.hostname!=='www.instagram.com'&&window.location.hostname!=='instagram.com'){{
+    alert('Please run this on an Instagram profile page!');return;
+  }}
+  var username=path.split('/')[0]||path;
+  if(!username||username==='explore'||username==='reels'||username==='stories'){{
+    alert('Please navigate to an Instagram profile page first (e.g. instagram.com/garyvee)');return;
+  }}
+
+  var overlay=document.createElement('div');
+  overlay.id='medstar-overlay';
+  overlay.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:-apple-system,sans-serif;';
+  overlay.innerHTML='<div style="background:#1e293b;padding:40px;border-radius:16px;text-align:center;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,0.5)"><div style="font-size:40px;margin-bottom:16px">📊</div><div id="ms-status" style="color:#e2e8f0;font-size:18px;font-weight:600">Fetching profile...</div><div id="ms-detail" style="color:#94a3b8;font-size:14px;margin-top:8px">@'+username+'</div><div style="margin-top:20px;height:4px;background:#334155;border-radius:2px;overflow:hidden"><div id="ms-bar" style="height:100%;width:10%;background:linear-gradient(90deg,#6366f1,#8b5cf6);transition:width 0.3s;border-radius:2px"></div></div></div>';
+  document.body.appendChild(overlay);
+
+  var status=document.getElementById('ms-status');
+  var detail=document.getElementById('ms-detail');
+  var bar=document.getElementById('ms-bar');
+
+  function fail(msg){{ status.textContent='Error'; detail.textContent=msg; detail.style.color='#f87171'; bar.style.background='#ef4444'; bar.style.width='100%'; setTimeout(function(){{ overlay.remove(); }},4000); }}
+
+  fetch('/api/v1/users/web_profile_info/?username='+username,{{
+    headers:{{'X-IG-App-ID':'936619743392459','X-Requested-With':'XMLHttpRequest'}}
+  }}).then(function(r){{
+    if(r.status===401||r.status===403)throw new Error('Login required - please log into Instagram first');
+    if(r.status===404)throw new Error('Profile not found');
+    if(!r.ok)throw new Error('Instagram returned '+r.status);
+    return r.json();
+  }}).then(function(d){{
+    var user=d.data.user;
+    if(!user)throw new Error('Profile not found or is private');
+    bar.style.width='30%';
+    status.textContent='Got profile info';
+    detail.textContent=user.full_name||'@'+username;
+
+    var fc=user.edge_followed_by?user.edge_followed_by.count:0;
+    var profile={{
+      username:user.username||username,
+      full_name:user.full_name||'',
+      follower_count:fc,
+      following_count:user.edge_follow?user.edge_follow.count:0,
+      post_count:user.edge_owner_to_timeline_media?user.edge_owner_to_timeline_media.count:0,
+      bio:user.biography||'',
+      profile_pic_url:user.profile_pic_url_hd||user.profile_pic_url||'',
+      is_verified:user.is_verified||false
+    }};
+
+    var userId=user.id;
+    status.textContent='Fetching posts...';
+    bar.style.width='50%';
+
+    return fetch('/api/v1/feed/user/'+userId+'/?count=30',{{
+      headers:{{'X-IG-App-ID':'936619743392459','X-Requested-With':'XMLHttpRequest'}}
+    }}).then(function(r2){{ return r2.json(); }}).then(function(feed){{
+      var items=feed.items||[];
+      bar.style.width='75%';
+      status.textContent='Processing '+items.length+' posts...';
+
+      var posts=items.map(function(item){{
+        var likes=item.like_count||0;
+        var comments=item.comment_count||0;
+        var isVideo=item.media_type===2;
+        var isCarousel=item.media_type===8;
+        var postType=isCarousel?'carousel':(isVideo?'video':'image');
+        var caption=item.caption?item.caption.text:'';
+        var hashtags=(caption.match(/#(\\w+)/g)||[]).map(function(h){{ return h.slice(1); }});
+        var ts=item.taken_at||0;
+        var postedAt=ts?new Date(ts*1000).toISOString():'';
+        var er=fc>0?Math.round(((likes+comments)/fc)*10000)/100:0;
+        var code=item.code||'';
+        var thumb='';
+        if(item.image_versions2&&item.image_versions2.candidates&&item.image_versions2.candidates.length){{
+          thumb=item.image_versions2.candidates[0].url;
+        }}else if(item.carousel_media&&item.carousel_media.length){{
+          var first=item.carousel_media[0];
+          if(first.image_versions2&&first.image_versions2.candidates)thumb=first.image_versions2.candidates[0].url;
+        }}
+        return {{shortcode:code,post_url:'https://www.instagram.com/p/'+code+'/',caption:caption,post_type:postType,likes:likes,comments:comments,video_views:isVideo?(item.play_count||item.view_count||0):0,engagement_rate:er,posted_at:postedAt,thumbnail_url:thumb,is_video:isVideo,hashtags:JSON.stringify(hashtags)}};
+      }});
+
+      bar.style.width='90%';
+      status.textContent='Sending to dashboard...';
+
+      var payload=JSON.stringify({{result:{{success:true,profile:profile,posts:posts}}}});
+      var form=document.createElement('form');
+      form.method='POST';
+      form.action=DASH+'/api/browser-scrape';
+      var input=document.createElement('input');
+      input.type='hidden';
+      input.name='payload';
+      input.value=payload;
+      form.appendChild(input);
+      document.body.appendChild(form);
+      form.submit();
+    }});
+  }}).catch(function(e){{ fail(e.message); }});
+}})();
+"""
+    resp = make_response(js)
+    resp.headers["Content-Type"] = "application/javascript"
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
 
 
 @app.route("/api/session", methods=["GET"])
