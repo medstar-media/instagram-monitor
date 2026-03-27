@@ -592,6 +592,144 @@ def get_viral_posts():
     return jsonify([dict(p) for p in posts])
 
 
+@app.route("/api/ad-recommendations", methods=["GET"])
+def get_ad_recommendations():
+    """Recommend posts that Medstar Media should boost with paid ads.
+    Scores posts on engagement rate, like volume, comment volume,
+    video views, recency, and content type — then returns the top candidates."""
+    import re as _re
+    limit = min(int(request.args.get("limit", 10)), 30)
+
+    conn = get_db()
+
+    # Get medstarmedia's profile
+    profile = conn.execute(
+        "SELECT * FROM profiles WHERE username = 'medstarmedia'"
+    ).fetchone()
+    if not profile:
+        conn.close()
+        return jsonify({"recommendations": [], "message": "Medstar Media profile not found."})
+
+    follower_count = profile["follower_count"] or 1
+
+    # Get all medstarmedia posts
+    posts = conn.execute("""
+        SELECT po.*, pr.username, pr.follower_count
+        FROM posts po
+        JOIN profiles pr ON po.profile_id = pr.id
+        WHERE pr.username = 'medstarmedia'
+        ORDER BY po.posted_at DESC
+    """).fetchall()
+
+    # Also get profile-wide averages for benchmarking
+    avgs = conn.execute("""
+        SELECT AVG(engagement_rate) as avg_er,
+               AVG(likes) as avg_likes,
+               AVG(comments) as avg_comments,
+               MAX(engagement_rate) as max_er
+        FROM posts po
+        JOIN profiles pr ON po.profile_id = pr.id
+        WHERE pr.username = 'medstarmedia'
+    """).fetchone()
+    conn.close()
+
+    if not posts:
+        return jsonify({"recommendations": [], "message": "No posts found for @medstarmedia. Scrape the profile first."})
+
+    avg_er = avgs["avg_er"] or 0.01
+    avg_likes = avgs["avg_likes"] or 1
+    avg_comments = avgs["avg_comments"] or 1
+    max_er = avgs["max_er"] or 0.01
+
+    scored_posts = []
+    for post in posts:
+        p = dict(post)
+        er = p["engagement_rate"] or 0
+        likes = p["likes"] or 0
+        comments = p["comments"] or 0
+        views = p["video_views"] or 0
+        post_type = p["post_type"] or "image"
+
+        # --- Scoring factors (each 0-1 range, weighted) ---
+
+        # 1. Engagement rate vs average (40% weight) - higher = proven content
+        er_score = min(er / max_er, 1.0) if max_er > 0 else 0
+
+        # 2. Like volume (15% weight) - social proof for ads
+        like_score = min(likes / (avg_likes * 3), 1.0) if avg_likes > 0 else 0
+
+        # 3. Comment volume (15% weight) - conversation-starting content
+        comment_score = min(comments / (avg_comments * 3), 1.0) if avg_comments > 0 else 0
+
+        # 4. Video views bonus (10% weight) - video content scales better
+        view_score = 0
+        if views > 0:
+            view_score = min(views / 10000, 1.0)
+
+        # 5. Content type bonus (10% weight) - reels/video outperform in ads
+        type_score = 0.9 if post_type == "video" else 0.7 if post_type == "carousel" else 0.4
+
+        # 6. Recency (10% weight) - fresher content performs better in ads
+        recency_score = 0.5
+        try:
+            from datetime import datetime as _dt
+            posted = _dt.fromisoformat(p["posted_at"].replace("Z", "+00:00"))
+            days_ago = (_dt.now(posted.tzinfo) - posted).days
+            recency_score = max(0, 1.0 - (days_ago / 180))
+        except Exception:
+            pass
+
+        # Weighted total
+        total_score = (
+            er_score * 0.40 +
+            like_score * 0.15 +
+            comment_score * 0.15 +
+            view_score * 0.10 +
+            type_score * 0.10 +
+            recency_score * 0.10
+        )
+
+        # Generate a reason why this post is recommended
+        reasons = []
+        if er > avg_er * 1.5:
+            reasons.append(f"Engagement rate ({round(er * 100, 2)}%) is {round(er / avg_er, 1)}x above your average")
+        if likes > avg_likes * 1.5:
+            reasons.append(f"{likes} likes — strong social proof")
+        if comments > avg_comments * 2:
+            reasons.append(f"{comments} comments — high conversation potential")
+        if views > 5000:
+            reasons.append(f"{formatNumber_py(views)} views — proven reach")
+        if post_type == "video":
+            reasons.append("Video/Reel — best ad format for reach")
+        elif post_type == "carousel":
+            reasons.append("Carousel — great for retargeting & education")
+        if recency_score > 0.7:
+            reasons.append("Recent post — timely & relevant")
+        if not reasons:
+            reasons.append("Solid overall metrics for paid promotion")
+
+        # Extract hashtags for context
+        caption = p.get("caption", "") or ""
+        tags = _re.findall(r"#(\w+)", caption)
+
+        p["ad_score"] = round(total_score * 100)
+        p["ad_reasons"] = reasons
+        p["hashtags_found"] = tags[:5]
+        p["hook"] = caption.split("\n")[0][:120] if caption else ""
+        scored_posts.append(p)
+
+    # Sort by score descending
+    scored_posts.sort(key=lambda x: x["ad_score"], reverse=True)
+    top = scored_posts[:limit]
+
+    return jsonify({
+        "recommendations": top,
+        "profile": "medstarmedia",
+        "total_posts_analyzed": len(posts),
+        "avg_engagement": round(avg_er * 100, 2)
+    })
+
+
 @app.route("/api/growth-tips", methods=["GET"])
 def get_growth_tips():
     """Generate data-driven growth tips for a profile (defaults to medstarmedia)."""
