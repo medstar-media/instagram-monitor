@@ -142,10 +142,11 @@ def remove_profile(username):
         conn.close()
 
 
-def scrape_profile(username, max_posts=30):
+def _get_instaloader():
     """
-    Scrape a single Instagram profile for posts and engagement data.
-    Returns dict with profile info and list of posts.
+    Create an Instaloader instance, optionally logged in via environment
+    variables IG_USERNAME + IG_PASSWORD or IG_SESSION_FILE.
+    Logging in avoids 403 blocks from cloud / datacenter IPs.
     """
     L = instaloader.Instaloader(
         download_pictures=False,
@@ -157,6 +158,54 @@ def scrape_profile(username, max_posts=30):
         compress_json=False,
         quiet=True
     )
+
+    # Try session file first (most reliable)
+    session_file = os.environ.get("IG_SESSION_FILE")
+    if session_file and os.path.exists(session_file):
+        try:
+            L.load_session_from_file(
+                os.environ.get("IG_USERNAME", ""), session_file
+            )
+            print("[auth] Loaded Instagram session from file")
+            return L
+        except Exception as e:
+            print(f"[auth] Session file load failed: {e}")
+
+    # Try username + password login
+    ig_user = os.environ.get("IG_USERNAME")
+    ig_pass = os.environ.get("IG_PASSWORD")
+    if ig_user and ig_pass:
+        try:
+            L.login(ig_user, ig_pass)
+            print(f"[auth] Logged in to Instagram as {ig_user}")
+            return L
+        except Exception as e:
+            print(f"[auth] Login failed: {e}")
+
+    # Try importing a session cookie directly (sessionid)
+    ig_session_id = os.environ.get("IG_SESSION_ID")
+    if ig_session_id:
+        try:
+            import requests
+            session = requests.Session()
+            session.cookies.set("sessionid", ig_session_id, domain=".instagram.com")
+            L.context._session = session
+            print("[auth] Loaded Instagram session cookie")
+            return L
+        except Exception as e:
+            print(f"[auth] Session cookie load failed: {e}")
+
+    print("[auth] WARNING: No Instagram credentials set. Scraping may fail from cloud IPs.")
+    print("[auth] Set IG_USERNAME + IG_PASSWORD or IG_SESSION_ID in Railway environment variables.")
+    return L
+
+
+def scrape_profile(username, max_posts=30):
+    """
+    Scrape a single Instagram profile for posts and engagement data.
+    Returns dict with profile info and list of posts.
+    """
+    L = _get_instaloader()
 
     try:
         profile = instaloader.Profile.from_username(L.context, username)
@@ -213,8 +262,15 @@ def scrape_profile(username, max_posts=30):
 
     except instaloader.exceptions.ProfileNotExistsException:
         return {"success": False, "error": f"Profile '{username}' does not exist."}
+    except instaloader.exceptions.LoginRequiredException:
+        return {"success": False, "error": "Instagram requires login. Set IG_USERNAME + IG_PASSWORD in Railway environment variables."}
     except instaloader.exceptions.ConnectionException as e:
-        return {"success": False, "error": f"Connection error: {str(e)}"}
+        err = str(e)
+        if "403" in err:
+            return {"success": False, "error": "Instagram blocked the request (403). Set IG_USERNAME + IG_PASSWORD in Railway environment variables to fix this."}
+        if "401" in err:
+            return {"success": False, "error": "Instagram login expired. Update IG_PASSWORD or IG_SESSION_ID in Railway environment variables."}
+        return {"success": False, "error": f"Connection error: {err}"}
     except Exception as e:
         return {"success": False, "error": f"Unexpected error: {str(e)}"}
 
