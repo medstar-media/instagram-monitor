@@ -103,10 +103,21 @@ def init_db():
             scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (profile_id) REFERENCES profiles(id)
         );
+        CREATE TABLE IF NOT EXISTS follower_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            profile_id INTEGER NOT NULL,
+            follower_count INTEGER DEFAULT 0,
+            following_count INTEGER DEFAULT 0,
+            post_count INTEGER DEFAULT 0,
+            recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (profile_id) REFERENCES profiles(id)
+        );
         CREATE INDEX IF NOT EXISTS idx_posts_profile ON posts(profile_id);
         CREATE INDEX IF NOT EXISTS idx_posts_engagement ON posts(engagement_rate DESC);
         CREATE INDEX IF NOT EXISTS idx_posts_likes ON posts(likes DESC);
         CREATE INDEX IF NOT EXISTS idx_posts_posted ON posts(posted_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_snapshots_profile ON follower_snapshots(profile_id);
+        CREATE INDEX IF NOT EXISTS idx_snapshots_date ON follower_snapshots(recorded_at);
     """)
     conn.commit()
     conn.close()
@@ -376,6 +387,14 @@ def save_scrape_results(result):
                 post["thumbnail_url"], 1 if post["is_video"] else 0,
                 post["hashtags"],
             ))
+        # Record follower snapshot for growth tracking
+        conn.execute("""
+            INSERT INTO follower_snapshots (profile_id, follower_count, following_count, post_count)
+            VALUES (?, ?, ?, ?)
+        """, (
+            profile_id, profile_data["follower_count"],
+            profile_data["following_count"], profile_data["post_count"],
+        ))
         conn.execute(
             "INSERT INTO scrape_log (profile_id, status, message) VALUES (?, 'success', ?)",
             (profile_id, f"Scraped {len(result['posts'])} posts"),

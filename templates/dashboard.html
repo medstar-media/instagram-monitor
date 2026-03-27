@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MedStar Instagram Monitor</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-adapter-date-fns/3.0.0/chartjs-adapter-date-fns.bundle.min.js"></script>
     <style>
         :root {
             --bg-primary: #0f1117;
@@ -291,6 +292,43 @@
             display: flex; align-items: center; gap: 8px;
             font-size: 13px; color: var(--text-secondary);
         }
+
+        /* ── Heatmap ── */
+        .heatmap-grid {
+            display: grid; grid-template-columns: 60px repeat(24, 1fr);
+            gap: 2px; font-size: 11px;
+        }
+        .heatmap-cell {
+            aspect-ratio: 1; border-radius: 4px; display: flex;
+            align-items: center; justify-content: center;
+            font-size: 10px; color: var(--text-muted); cursor: default;
+            position: relative;
+        }
+        .heatmap-cell:hover { outline: 1px solid var(--accent-light); z-index: 1; }
+        .heatmap-label {
+            display: flex; align-items: center; font-size: 11px;
+            color: var(--text-secondary); padding-right: 8px; justify-content: flex-end;
+        }
+        .heatmap-hour-labels {
+            display: grid; grid-template-columns: 60px repeat(24, 1fr);
+            gap: 2px; margin-bottom: 4px;
+        }
+        .heatmap-hour-label { text-align: center; font-size: 10px; color: var(--text-muted); }
+
+        /* ── Viral alert badge ── */
+        .viral-badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            background: rgba(255, 107, 107, 0.15); color: var(--red);
+            padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
+        }
+        .viral-row { border-left: 3px solid var(--red) !important; }
+
+        /* ── L:C Ratio ── */
+        .ratio-badge {
+            display: inline-block; padding: 2px 8px; border-radius: 20px;
+            font-size: 11px; font-weight: 600;
+            background: rgba(253, 203, 110, 0.15); color: var(--orange);
+        }
     </style>
 </head>
 <body>
@@ -316,6 +354,15 @@
         </div>
         <div class="nav-item" onclick="showPage('all-posts')">
             <span class="nav-icon">📋</span> <span>All Posts</span>
+        </div>
+        <div class="nav-item" onclick="showPage('hashtags')">
+            <span class="nav-icon">#️⃣</span> <span>Hashtags</span>
+        </div>
+        <div class="nav-item" onclick="showPage('timing')">
+            <span class="nav-icon">🕐</span> <span>Best Times</span>
+        </div>
+        <div class="nav-item" onclick="showPage('growth')">
+            <span class="nav-icon">📈</span> <span>Growth</span>
         </div>
     </div>
     <div style="padding:12px;border-top:1px solid var(--border);">
@@ -407,6 +454,13 @@
                 <div class="panel-header"><h3>Post Types Distribution</h3></div>
                 <div class="panel-body"><div class="chart-container"><canvas id="chartTypes"></canvas></div></div>
             </div>
+        </div>
+
+        <div class="panel" id="viralPanel" style="display:none">
+            <div class="panel-header">
+                <h3>🚨 Viral Posts (2x+ avg engagement)</h3>
+            </div>
+            <div class="panel-body" id="viralPostsTable"></div>
         </div>
 
         <div class="panel">
@@ -530,6 +584,91 @@
         </div>
         <div style="display: flex; justify-content: center; gap: 8px; margin-top: 12px;" id="pagination"></div>
     </div>
+
+    <!-- ═══ HASHTAG LEADERBOARD PAGE ═══ -->
+    <div class="page-section" id="page-hashtags">
+        <div class="page-header">
+            <h2>Hashtag Leaderboard</h2>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">
+            Hashtags ranked by average engagement rate. Find which tags drive the most interaction.
+        </p>
+        <div class="filters-bar">
+            <select id="hashtagDays" onchange="loadHashtags()">
+                <option value="30">Last 30 Days</option>
+                <option value="90" selected>Last 90 Days</option>
+                <option value="365">Last Year</option>
+                <option value="3650">All Time</option>
+            </select>
+            <select id="hashtagMinUses" onchange="loadHashtags()">
+                <option value="1">Min 1 use</option>
+                <option value="2" selected>Min 2 uses</option>
+                <option value="3">Min 3 uses</option>
+                <option value="5">Min 5 uses</option>
+            </select>
+        </div>
+        <div class="panel">
+            <div class="panel-body" id="hashtagsTable">
+                <div class="empty-state"><div class="spinner"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ POSTING TIMES PAGE ═══ -->
+    <div class="page-section" id="page-timing">
+        <div class="page-header">
+            <h2>Best Times to Post</h2>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">
+            Heatmap showing average engagement by day and hour. Darker = higher engagement.
+        </p>
+        <div class="filters-bar">
+            <select id="timingDays" onchange="loadTimingHeatmap()">
+                <option value="30">Last 30 Days</option>
+                <option value="90">Last 90 Days</option>
+                <option value="365" selected>Last Year</option>
+                <option value="3650">All Time</option>
+            </select>
+            <select id="timingProfile" onchange="loadTimingHeatmap()">
+                <option value="">All Profiles</option>
+            </select>
+        </div>
+        <div class="panel">
+            <div class="panel-body" id="heatmapContainer">
+                <div class="empty-state"><div class="spinner"></div></div>
+            </div>
+        </div>
+        <div class="panel" style="margin-top:16px">
+            <div class="panel-header"><h3>Top 5 Time Slots</h3></div>
+            <div class="panel-body" id="topTimeSlotsTable"></div>
+        </div>
+    </div>
+
+    <!-- ═══ GROWTH PAGE ═══ -->
+    <div class="page-section" id="page-growth">
+        <div class="page-header">
+            <h2>Follower Growth</h2>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">
+            Track follower count changes over time for each monitored profile.
+        </p>
+        <div class="filters-bar">
+            <select id="growthDays" onchange="loadGrowth()">
+                <option value="30" selected>Last 30 Days</option>
+                <option value="90">Last 90 Days</option>
+                <option value="365">Last Year</option>
+                <option value="3650">All Time</option>
+            </select>
+            <select id="growthProfile" onchange="loadGrowth()">
+                <option value="">All Profiles</option>
+            </select>
+        </div>
+        <div class="panel">
+            <div class="panel-body">
+                <div class="chart-container" style="height:400px"><canvas id="chartGrowth"></canvas></div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -546,9 +685,9 @@ function showPage(page) {
     document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.getElementById('page-' + page).classList.add('active');
-    document.querySelectorAll('.nav-item')[
-        ['overview','top-posts','hooks','profiles','all-posts'].indexOf(page)
-    ].classList.add('active');
+    const pages = ['overview','top-posts','hooks','profiles','all-posts','hashtags','timing','growth'];
+    const idx = pages.indexOf(page);
+    if (idx >= 0) document.querySelectorAll('.nav-item')[idx].classList.add('active');
     currentPage = page;
 
     if (page === 'overview') loadOverview();
@@ -556,6 +695,9 @@ function showPage(page) {
     if (page === 'hooks') loadHooks();
     if (page === 'profiles') loadProfiles();
     if (page === 'all-posts') loadAllPosts();
+    if (page === 'hashtags') loadHashtags();
+    if (page === 'timing') loadTimingHeatmap();
+    if (page === 'growth') loadGrowth();
 }
 
 // ─── Toast notifications ───
@@ -777,6 +919,9 @@ async function loadOverview() {
     } else {
         container.innerHTML = '<div class="empty-state"><div class="icon">📊</div><p>No posts yet. Add profiles and scrape to see top performers here.</p></div>';
     }
+
+    // Viral posts
+    loadViralPosts();
 }
 
 // ─── Render posts table ───
@@ -793,6 +938,7 @@ function renderPostsTable(posts, compact = false) {
             <th>Caption</th>
             <th>Likes</th>
             <th>Comments</th>
+            <th>L:C</th>
             ${!compact ? '<th>Views</th>' : ''}
             <th>Eng. Rate</th>
             <th>Posted</th>
@@ -800,8 +946,10 @@ function renderPostsTable(posts, compact = false) {
         </tr></thead><tbody>`;
 
     posts.forEach((p, i) => {
-        html += `<tr>
-            <td style="color: var(--text-muted)">${i + 1}</td>
+        const lcRatio = p.comments > 0 ? (p.likes / p.comments).toFixed(1) : '—';
+        const isViral = p.profile_avg_er && p.engagement_rate >= p.profile_avg_er * 2;
+        html += `<tr class="${isViral ? 'viral-row' : ''}">
+            <td style="color: var(--text-muted)">${i + 1}${isViral ? ' <span class="viral-badge">VIRAL</span>' : ''}</td>
             <td>
                 <div class="profile-cell">
                     <div>
@@ -814,6 +962,7 @@ function renderPostsTable(posts, compact = false) {
             <td><div class="caption-preview" title="${(p.caption||'').replace(/"/g, '&quot;')}">${truncate(p.caption, 60)}</div></td>
             <td class="metric">${formatNumber(p.likes)}</td>
             <td class="metric">${formatNumber(p.comments)}</td>
+            <td><span class="ratio-badge">${lcRatio}</span></td>
             ${!compact ? `<td class="metric">${p.is_video ? formatNumber(p.video_views) : '—'}</td>` : ''}
             <td class="metric ${engagementColor(p.engagement_rate)}">${p.engagement_rate.toFixed(2)}%</td>
             <td style="color: var(--text-secondary); font-size: 12px">${timeAgo(p.posted_at)}</td>
@@ -867,14 +1016,16 @@ async function loadProfiles() {
     const profiles = await api('/api/profiles');
     const container = document.getElementById('profilesTable');
 
-    // Also populate the profile filter dropdown
-    const filterEl = document.getElementById('filterProfile');
-    if (filterEl) {
-        filterEl.innerHTML = '<option value="">All Profiles</option>';
-        (profiles || []).forEach(p => {
-            filterEl.innerHTML += `<option value="${p.username}">@${p.username}</option>`;
-        });
-    }
+    // Populate all profile filter dropdowns
+    ['filterProfile', 'timingProfile', 'growthProfile'].forEach(elId => {
+        const el = document.getElementById(elId);
+        if (el) {
+            el.innerHTML = '<option value="">All Profiles</option>';
+            (profiles || []).forEach(p => {
+                el.innerHTML += `<option value="${p.username}">@${p.username}</option>`;
+            });
+        }
+    });
 
     if (!profiles || profiles.length === 0) {
         container.innerHTML = '<div class="empty-state"><div class="icon">👥</div><p>No profiles added yet. Add your first Instagram profile to start monitoring.</p><button class="btn btn-primary" onclick="openModal()">+ Add Profile</button></div>';
@@ -951,6 +1102,165 @@ function goToPage(page) {
 function debounceLoadPosts() {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => { postsOffset = 0; loadAllPosts(); }, 400);
+}
+
+// ─── Load Viral Posts (overview) ───
+async function loadViralPosts() {
+    const viral = await api('/api/viral-posts?days=90&multiplier=2');
+    const panel = document.getElementById('viralPanel');
+    const container = document.getElementById('viralPostsTable');
+    if (viral && viral.length > 0) {
+        panel.style.display = '';
+        container.innerHTML = renderPostsTable(viral, true);
+    } else {
+        panel.style.display = 'none';
+    }
+}
+
+// ─── Load Hashtag Leaderboard ───
+async function loadHashtags() {
+    const days = document.getElementById('hashtagDays').value;
+    const minUses = document.getElementById('hashtagMinUses').value;
+    const data = await api(`/api/hashtag-leaderboard?days=${days}&min_uses=${minUses}`);
+    const container = document.getElementById('hashtagsTable');
+
+    if (!data || data.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>No hashtags found. Try adjusting the filters.</p></div>';
+        return;
+    }
+
+    let html = '<table class="data-table"><thead><tr><th>#</th><th>Hashtag</th><th>Uses</th><th>Avg Engagement</th><th>Avg Likes</th><th>Avg Comments</th></tr></thead><tbody>';
+    data.forEach((h, i) => {
+        html += `<tr>
+            <td style="color: var(--text-muted)">${i + 1}</td>
+            <td style="font-weight:600;color:var(--accent-light)">#${h.hashtag}</td>
+            <td class="metric">${h.uses}</td>
+            <td class="metric ${engagementColor(h.avg_engagement)}">${h.avg_engagement.toFixed(2)}%</td>
+            <td class="metric">${formatNumber(h.avg_likes)}</td>
+            <td class="metric">${formatNumber(h.avg_comments)}</td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+// ─── Load Timing Heatmap ───
+async function loadTimingHeatmap() {
+    const days = document.getElementById('timingDays').value;
+    const profile = document.getElementById('timingProfile').value;
+    const params = new URLSearchParams({days});
+    if (profile) params.set('profile', profile);
+
+    const data = await api('/api/posting-times?' + params);
+    const container = document.getElementById('heatmapContainer');
+
+    if (!data || data.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>No posting time data available yet.</p></div>';
+        return;
+    }
+
+    // Find max engagement for color scaling
+    const maxEr = Math.max(...data.map(d => d.avg_engagement), 0.01);
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    let html = '<div class="heatmap-hour-labels"><div></div>';
+    for (let h = 0; h < 24; h++) {
+        html += `<div class="heatmap-hour-label">${h === 0 ? '12a' : h < 12 ? h + 'a' : h === 12 ? '12p' : (h-12) + 'p'}</div>`;
+    }
+    html += '</div><div class="heatmap-grid">';
+
+    for (let dow = 0; dow < 7; dow++) {
+        html += `<div class="heatmap-label">${dayNames[dow]}</div>`;
+        for (let hour = 0; hour < 24; hour++) {
+            const cell = data.find(d => d.day === dow && d.hour === hour) || {count: 0, avg_engagement: 0};
+            const intensity = cell.avg_engagement > 0 ? Math.max(0.15, cell.avg_engagement / maxEr) : 0;
+            const bg = cell.count > 0
+                ? `rgba(108, 92, 231, ${intensity})`
+                : 'rgba(45, 48, 69, 0.3)';
+            const tooltip = cell.count > 0
+                ? `${dayNames[dow]} ${hour}:00 — ${cell.count} posts, ${cell.avg_engagement.toFixed(2)}% avg eng`
+                : `${dayNames[dow]} ${hour}:00 — no posts`;
+            html += `<div class="heatmap-cell" style="background:${bg}" title="${tooltip}">${cell.count > 0 ? cell.count : ''}</div>`;
+        }
+    }
+    html += '</div>';
+    container.innerHTML = html;
+
+    // Top 5 time slots
+    const sorted = data.filter(d => d.count > 0).sort((a, b) => b.avg_engagement - a.avg_engagement).slice(0, 5);
+    const slotsContainer = document.getElementById('topTimeSlotsTable');
+    if (sorted.length > 0) {
+        let shtml = '<table class="data-table"><thead><tr><th>#</th><th>Day</th><th>Hour</th><th>Posts</th><th>Avg Engagement</th></tr></thead><tbody>';
+        sorted.forEach((s, i) => {
+            const hourStr = s.hour === 0 ? '12:00 AM' : s.hour < 12 ? s.hour + ':00 AM' : s.hour === 12 ? '12:00 PM' : (s.hour-12) + ':00 PM';
+            shtml += `<tr>
+                <td style="color:var(--text-muted)">${i+1}</td>
+                <td>${dayNames[s.day]}</td>
+                <td>${hourStr}</td>
+                <td class="metric">${s.count}</td>
+                <td class="metric ${engagementColor(s.avg_engagement)}">${s.avg_engagement.toFixed(2)}%</td>
+            </tr>`;
+        });
+        shtml += '</tbody></table>';
+        slotsContainer.innerHTML = shtml;
+    }
+}
+
+// ─── Load Growth Chart ───
+let chartGrowth = null;
+async function loadGrowth() {
+    const days = document.getElementById('growthDays').value;
+    const profile = document.getElementById('growthProfile').value;
+    const params = new URLSearchParams({days});
+    if (profile) params.set('profile', profile);
+
+    const data = await api('/api/growth?' + params);
+    if (!data || data.length === 0) {
+        if (chartGrowth) chartGrowth.destroy();
+        document.getElementById('chartGrowth').parentElement.innerHTML =
+            '<div class="empty-state"><p>No growth data yet. Data will appear after the first re-scrape.</p></div>';
+        return;
+    }
+
+    // Group by username
+    const byProfile = {};
+    data.forEach(s => {
+        if (!byProfile[s.username]) byProfile[s.username] = [];
+        byProfile[s.username].push({x: new Date(s.recorded_at), y: s.follower_count});
+    });
+
+    const colors = ['#6c5ce7', '#00cec9', '#fd79a8', '#fdcb6e', '#ff6b6b', '#a29bfe', '#55efc4', '#fab1a0'];
+    const datasets = Object.entries(byProfile).map(([username, points], i) => ({
+        label: '@' + username,
+        data: points,
+        borderColor: colors[i % colors.length],
+        backgroundColor: colors[i % colors.length] + '20',
+        fill: false,
+        tension: 0.3,
+        pointRadius: 3,
+    }));
+
+    if (chartGrowth) chartGrowth.destroy();
+    chartGrowth = new Chart(document.getElementById('chartGrowth'), {
+        type: 'line',
+        data: {datasets},
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: '#8b8da3' } } },
+            scales: {
+                x: {
+                    type: 'time',
+                    time: { unit: days <= 30 ? 'day' : 'week' },
+                    ticks: { color: '#8b8da3' },
+                    grid: { color: 'rgba(45,48,69,0.5)' }
+                },
+                y: {
+                    ticks: { color: '#8b8da3', callback: v => formatNumber(v) },
+                    grid: { color: 'rgba(45,48,69,0.5)' }
+                }
+            }
+        }
+    });
 }
 
 // ─── Init ───

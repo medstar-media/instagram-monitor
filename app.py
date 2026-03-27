@@ -366,6 +366,152 @@ def get_hooks():
     return jsonify(hooks)
 
 
+@app.route("/api/hashtag-leaderboard", methods=["GET"])
+def get_hashtag_leaderboard():
+    """Rank hashtags by average engagement rate."""
+    days = request.args.get("days", "90")
+    min_uses = int(request.args.get("min_uses", 2))
+
+    conn = get_db()
+    posts = conn.execute("""
+        SELECT po.hashtags, po.engagement_rate, po.likes, po.comments
+        FROM posts po
+        WHERE po.hashtags IS NOT NULL AND po.hashtags != '[]'
+          AND po.posted_at >= datetime('now', ?)
+    """, (f"-{days} days",)).fetchall()
+    conn.close()
+
+    # Aggregate hashtag stats
+    tag_stats = {}
+    for post in posts:
+        try:
+            tags = json.loads(post["hashtags"])
+        except Exception:
+            continue
+        for tag in tags:
+            tag = tag.lower()
+            if tag not in tag_stats:
+                tag_stats[tag] = {"uses": 0, "total_er": 0, "total_likes": 0, "total_comments": 0}
+            tag_stats[tag]["uses"] += 1
+            tag_stats[tag]["total_er"] += post["engagement_rate"]
+            tag_stats[tag]["total_likes"] += post["likes"]
+            tag_stats[tag]["total_comments"] += post["comments"]
+
+    leaderboard = []
+    for tag, s in tag_stats.items():
+        if s["uses"] >= min_uses:
+            leaderboard.append({
+                "hashtag": tag,
+                "uses": s["uses"],
+                "avg_engagement": round(s["total_er"] / s["uses"], 4),
+                "avg_likes": round(s["total_likes"] / s["uses"]),
+                "avg_comments": round(s["total_comments"] / s["uses"]),
+                "total_likes": s["total_likes"],
+            })
+
+    leaderboard.sort(key=lambda x: x["avg_engagement"], reverse=True)
+    return jsonify(leaderboard[:50])
+
+
+@app.route("/api/posting-times", methods=["GET"])
+def get_posting_times():
+    """Return posting time data for heatmap (day of week x hour)."""
+    days = request.args.get("days", "365")
+    profile_filter = request.args.get("profile", "")
+
+    query = """
+        SELECT po.posted_at, po.engagement_rate, po.likes, po.comments
+        FROM posts po
+        JOIN profiles pr ON po.profile_id = pr.id
+        WHERE po.posted_at IS NOT NULL AND po.posted_at != ''
+          AND po.posted_at >= datetime('now', ?)
+    """
+    params = [f"-{days} days"]
+    if profile_filter:
+        query += " AND pr.username = ?"
+        params.append(profile_filter)
+
+    conn = get_db()
+    posts = conn.execute(query, params).fetchall()
+    conn.close()
+
+    # Build 7x24 grid (day_of_week x hour)
+    grid = [[{"count": 0, "total_er": 0} for _ in range(24)] for _ in range(7)]
+
+    for post in posts:
+        try:
+            dt = datetime.fromisoformat(post["posted_at"].replace("Z", "+00:00"))
+            dow = dt.weekday()  # 0=Monday
+            hour = dt.hour
+            grid[dow][hour]["count"] += 1
+            grid[dow][hour]["total_er"] += post["engagement_rate"]
+        except Exception:
+            continue
+
+    # Convert to avg engagement
+    heatmap = []
+    for dow in range(7):
+        for hour in range(24):
+            cell = grid[dow][hour]
+            heatmap.append({
+                "day": dow,
+                "hour": hour,
+                "count": cell["count"],
+                "avg_engagement": round(cell["total_er"] / cell["count"], 4) if cell["count"] > 0 else 0
+            })
+
+    return jsonify(heatmap)
+
+
+@app.route("/api/growth", methods=["GET"])
+def get_growth():
+    """Return follower growth data over time."""
+    days = request.args.get("days", "90")
+    profile_filter = request.args.get("profile", "")
+
+    query = """
+        SELECT fs.follower_count, fs.following_count, fs.post_count,
+               fs.recorded_at, pr.username
+        FROM follower_snapshots fs
+        JOIN profiles pr ON fs.profile_id = pr.id
+        WHERE fs.recorded_at >= datetime('now', ?)
+    """
+    params = [f"-{days} days"]
+    if profile_filter:
+        query += " AND pr.username = ?"
+        params.append(profile_filter)
+    query += " ORDER BY fs.recorded_at ASC"
+
+    conn = get_db()
+    snapshots = conn.execute(query, params).fetchall()
+    conn.close()
+
+    return jsonify([dict(s) for s in snapshots])
+
+
+@app.route("/api/viral-posts", methods=["GET"])
+def get_viral_posts():
+    """Find posts with engagement >= 2x the profile's average."""
+    days = request.args.get("days", "30")
+    multiplier = float(request.args.get("multiplier", 2.0))
+
+    conn = get_db()
+    posts = conn.execute("""
+        SELECT po.*, pr.username, pr.full_name, pr.follower_count,
+               pr.profile_pic_url, pr.is_verified,
+               (SELECT AVG(p2.engagement_rate) FROM posts p2 WHERE p2.profile_id = po.profile_id) as profile_avg_er
+        FROM posts po
+        JOIN profiles pr ON po.profile_id = pr.id
+        WHERE po.posted_at >= datetime('now', ?)
+          AND po.engagement_rate >= ? * (SELECT AVG(p2.engagement_rate) FROM posts p2 WHERE p2.profile_id = po.profile_id)
+        ORDER BY po.engagement_rate DESC
+        LIMIT 20
+    """, (f"-{days} days", multiplier)).fetchall()
+    conn.close()
+
+    return jsonify([dict(p) for p in posts])
+
+
 @app.route("/api/export", methods=["GET"])
 def export_data():
     """Export all post data as JSON."""
