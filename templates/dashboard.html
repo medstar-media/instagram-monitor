@@ -329,6 +329,39 @@
             font-size: 11px; font-weight: 600;
             background: rgba(253, 203, 110, 0.15); color: var(--orange);
         }
+
+        /* ── Industry Hashtags ── */
+        .tag-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+        .tag-card {
+            background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px;
+            padding: 14px 16px; transition: all 0.2s; cursor: pointer; position: relative;
+        }
+        .tag-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+        .tag-card .tag-name { font-size: 15px; font-weight: 700; color: var(--accent-light); margin-bottom: 4px; }
+        .tag-card .tag-vol { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+        .tag-card .tag-desc { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+        .pop-high { border-left: 3px solid var(--green); }
+        .pop-medium { border-left: 3px solid var(--orange); }
+        .pop-low { border-left: 3px solid var(--text-muted); }
+        .pop-dot {
+            display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px;
+        }
+        .pop-dot-high { background: var(--green); }
+        .pop-dot-medium { background: var(--orange); }
+        .pop-dot-low { background: var(--text-muted); }
+        .tag-copy-toast {
+            position: absolute; top: 8px; right: 10px; font-size: 11px;
+            color: var(--green); opacity: 0; transition: opacity 0.3s;
+        }
+        .cat-summary {
+            display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px;
+        }
+        .cat-chip {
+            padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+            cursor: pointer; border: 1px solid var(--border); background: var(--bg-card);
+            color: var(--text-secondary); transition: all 0.2s;
+        }
+        .cat-chip:hover, .cat-chip.active { background: var(--accent); color: white; border-color: var(--accent); }
     </style>
 </head>
 <body>
@@ -363,6 +396,9 @@
         </div>
         <div class="nav-item" onclick="showPage('growth')">
             <span class="nav-icon">📈</span> <span>Growth</span>
+        </div>
+        <div class="nav-item" onclick="showPage('industry-tags')">
+            <span class="nav-icon">🏷️</span> <span>Industry Tags</span>
         </div>
     </div>
     <div style="padding:12px;border-top:1px solid var(--border);">
@@ -669,6 +705,61 @@
             </div>
         </div>
     </div>
+
+    <!-- ═══ INDUSTRY HASHTAGS PAGE ═══ -->
+    <div class="page-section" id="page-industry-tags">
+        <div class="page-header">
+            <h2>Industry Hashtag Library</h2>
+            <button class="btn btn-primary" onclick="openAddHashtagModal()">+ Add Custom Tag</button>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">
+            Curated hashtags for aesthetic practices, medspas, and plastic surgery marketing. Click any tag to copy it. <span class="pop-dot pop-dot-high"></span>High volume &nbsp; <span class="pop-dot pop-dot-medium"></span>Medium &nbsp; <span class="pop-dot pop-dot-low"></span>Niche
+        </p>
+        <div class="filters-bar">
+            <input type="text" id="tagSearch" placeholder="Search hashtags..." style="width:220px" oninput="debounceLoadIndustryTags()" />
+            <select id="tagPopularity" onchange="loadIndustryTags()">
+                <option value="">All Popularity</option>
+                <option value="high">High Volume</option>
+                <option value="medium">Medium Volume</option>
+                <option value="low">Niche / Low Volume</option>
+            </select>
+        </div>
+        <div class="cat-summary" id="catChips"></div>
+        <div id="industryTagsGrid"></div>
+        <div style="margin-top:20px;padding:16px;background:var(--bg-card);border-radius:var(--radius);border:1px solid var(--border);">
+            <h3 style="font-size:14px;margin-bottom:8px;color:var(--text-primary)">Quick Copy Sets</h3>
+            <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Click a set to copy all hashtags to clipboard — paste straight into your caption.</p>
+            <div style="display:flex;flex-wrap:wrap;gap:8px" id="quickCopySets"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Industry Hashtag Modal -->
+<div class="modal-overlay" id="addHashtagModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Add Custom Hashtag</h3>
+            <button class="modal-close" onclick="closeHashtagModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Hashtag (without #)</label>
+                <input type="text" id="newHashtag" placeholder="e.g. medsparesults" />
+            </div>
+            <div class="form-group">
+                <label>Category</label>
+                <input type="text" id="newHashtagCategory" placeholder="e.g. Custom" value="Custom" />
+            </div>
+            <div class="form-group">
+                <label>Description (optional)</label>
+                <input type="text" id="newHashtagDesc" placeholder="What is this tag good for?" />
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeHashtagModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="addIndustryHashtag()">Add Tag</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -685,7 +776,7 @@ function showPage(page) {
     document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.getElementById('page-' + page).classList.add('active');
-    const pages = ['overview','top-posts','hooks','profiles','all-posts','hashtags','timing','growth'];
+    const pages = ['overview','top-posts','hooks','profiles','all-posts','hashtags','timing','growth','industry-tags'];
     const idx = pages.indexOf(page);
     if (idx >= 0) document.querySelectorAll('.nav-item')[idx].classList.add('active');
     currentPage = page;
@@ -698,6 +789,7 @@ function showPage(page) {
     if (page === 'hashtags') loadHashtags();
     if (page === 'timing') loadTimingHeatmap();
     if (page === 'growth') loadGrowth();
+    if (page === 'industry-tags') loadIndustryTags();
 }
 
 // ─── Toast notifications ───
@@ -1261,6 +1353,110 @@ async function loadGrowth() {
             }
         }
     });
+}
+
+// ─── Industry Hashtags ───
+let tagSearchTimer = null;
+let activeTagCategory = '';
+
+function debounceLoadIndustryTags() {
+    clearTimeout(tagSearchTimer);
+    tagSearchTimer = setTimeout(loadIndustryTags, 300);
+}
+
+async function loadIndustryTags() {
+    const search = document.getElementById('tagSearch').value;
+    const popularity = document.getElementById('tagPopularity').value;
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (popularity) params.set('popularity', popularity);
+    if (activeTagCategory) params.set('category', activeTagCategory);
+
+    const data = await api('/api/industry-hashtags?' + params);
+    if (!data) return;
+
+    // Render category chips
+    const chipsEl = document.getElementById('catChips');
+    let chipHtml = `<div class="cat-chip ${!activeTagCategory ? 'active' : ''}" onclick="filterTagCategory('')">All (${data.total})</div>`;
+    const catCounts = {};
+    data.hashtags.forEach(t => { catCounts[t.category] = (catCounts[t.category] || 0) + 1; });
+    data.categories.forEach(cat => {
+        chipHtml += `<div class="cat-chip ${activeTagCategory === cat ? 'active' : ''}" onclick="filterTagCategory('${cat}')">${cat} (${catCounts[cat] || 0})</div>`;
+    });
+    chipsEl.innerHTML = chipHtml;
+
+    // Render tag cards
+    const grid = document.getElementById('industryTagsGrid');
+    if (data.hashtags.length === 0) {
+        grid.innerHTML = '<div class="empty-state"><p>No hashtags found matching your filters.</p></div>';
+    } else {
+        let html = '<div class="tag-grid">';
+        data.hashtags.forEach(t => {
+            html += `<div class="tag-card pop-${t.popularity}" onclick="copyTag('${t.hashtag}', this)" title="Click to copy">
+                <div class="tag-copy-toast" id="toast-${t.hashtag}">Copied!</div>
+                <div class="tag-name">#${t.hashtag}</div>
+                <div class="tag-vol"><span class="pop-dot pop-dot-${t.popularity}"></span>${t.post_volume} posts &middot; ${t.popularity} volume</div>
+                <div class="tag-desc">${t.description || ''}</div>
+            </div>`;
+        });
+        html += '</div>';
+        grid.innerHTML = html;
+    }
+
+    // Quick copy sets
+    const setsEl = document.getElementById('quickCopySets');
+    const catGroups = {};
+    data.hashtags.forEach(t => {
+        if (!catGroups[t.category]) catGroups[t.category] = [];
+        catGroups[t.category].push('#' + t.hashtag);
+    });
+    let setsHtml = '';
+    Object.entries(catGroups).forEach(([cat, tags]) => {
+        const top10 = tags.slice(0, 10).join(' ');
+        setsHtml += `<button class="btn btn-secondary btn-sm" onclick="copyText('${top10.replace(/'/g, "\\'")}'); showToast('Copied ${cat} set!')" title="${top10}">${cat} (${Math.min(tags.length, 10)} tags)</button>`;
+    });
+    // All top tags mixed set
+    const mixedTop = data.hashtags.filter(t => t.popularity === 'high').slice(0, 15).map(t => '#' + t.hashtag).join(' ');
+    if (mixedTop) {
+        setsHtml += `<button class="btn btn-primary btn-sm" onclick="copyText('${mixedTop.replace(/'/g, "\\'")}'); showToast('Copied top tags!')">Top High-Volume Mix</button>`;
+    }
+    setsEl.innerHTML = setsHtml;
+}
+
+function filterTagCategory(cat) {
+    activeTagCategory = cat;
+    loadIndustryTags();
+}
+
+function copyTag(tag, el) {
+    navigator.clipboard.writeText('#' + tag);
+    const toast = el.querySelector('.tag-copy-toast');
+    if (toast) { toast.style.opacity = '1'; setTimeout(() => { toast.style.opacity = '0'; }, 1500); }
+}
+
+function copyText(text) {
+    navigator.clipboard.writeText(text);
+}
+
+function openAddHashtagModal() { document.getElementById('addHashtagModal').classList.add('show'); }
+function closeHashtagModal() { document.getElementById('addHashtagModal').classList.remove('show'); }
+
+async function addIndustryHashtag() {
+    const hashtag = document.getElementById('newHashtag').value.trim().replace('#', '');
+    const category = document.getElementById('newHashtagCategory').value.trim() || 'Custom';
+    const description = document.getElementById('newHashtagDesc').value.trim();
+    if (!hashtag) return showToast('Enter a hashtag', 'error');
+
+    const result = await api('/api/industry-hashtags', { method: 'POST', body: { hashtag, category, description } });
+    if (result && !result.error) {
+        showToast(`#${hashtag} added!`);
+        closeHashtagModal();
+        document.getElementById('newHashtag').value = '';
+        document.getElementById('newHashtagDesc').value = '';
+        loadIndustryTags();
+    } else {
+        showToast(result?.error || 'Failed', 'error');
+    }
 }
 
 // ─── Init ───

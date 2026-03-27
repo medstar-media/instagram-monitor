@@ -422,6 +422,77 @@ def get_hashtag_leaderboard():
     return jsonify(leaderboard[:50])
 
 
+@app.route("/api/industry-hashtags", methods=["GET"])
+def get_industry_hashtags():
+    """Get curated industry hashtags from the library."""
+    category = request.args.get("category", "")
+    popularity = request.args.get("popularity", "")
+    search = request.args.get("search", "")
+
+    query = "SELECT * FROM hashtag_library WHERE 1=1"
+    params = []
+
+    if category:
+        query += " AND category = ?"
+        params.append(category)
+    if popularity:
+        query += " AND popularity = ?"
+        params.append(popularity)
+    if search:
+        query += " AND (hashtag LIKE ? OR description LIKE ?)"
+        params.extend([f"%{search}%", f"%{search}%"])
+
+    query += " ORDER BY CASE popularity WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 END, hashtag"
+
+    conn = get_db()
+    tags = conn.execute(query, params).fetchall()
+
+    # Get categories for filter
+    categories = conn.execute("SELECT DISTINCT category FROM hashtag_library ORDER BY category").fetchall()
+    conn.close()
+
+    return jsonify({
+        "hashtags": [dict(t) for t in tags],
+        "categories": [c["category"] for c in categories],
+        "total": len(tags)
+    })
+
+
+@app.route("/api/industry-hashtags", methods=["POST"])
+def add_industry_hashtag():
+    """Add a custom hashtag to the library."""
+    data = request.json
+    hashtag = data.get("hashtag", "").strip().lstrip("#").lower()
+    category = data.get("category", "Custom")
+    description = data.get("description", "")
+
+    if not hashtag:
+        return jsonify({"error": "Hashtag is required"}), 400
+
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO hashtag_library (hashtag, category, popularity, post_volume, description) VALUES (?, ?, 'medium', 'Custom', ?)",
+            (hashtag, category, description),
+        )
+        conn.commit()
+        return jsonify({"message": f"#{hashtag} added to library"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+
+
+@app.route("/api/industry-hashtags/<hashtag>", methods=["DELETE"])
+def delete_industry_hashtag(hashtag):
+    """Remove a hashtag from the library."""
+    conn = get_db()
+    conn.execute("DELETE FROM hashtag_library WHERE hashtag = ?", (hashtag.lower(),))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": f"#{hashtag} removed"})
+
+
 @app.route("/api/posting-times", methods=["GET"])
 def get_posting_times():
     """Return posting time data for heatmap (day of week x hour)."""

@@ -116,11 +116,126 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_posts_engagement ON posts(engagement_rate DESC);
         CREATE INDEX IF NOT EXISTS idx_posts_likes ON posts(likes DESC);
         CREATE INDEX IF NOT EXISTS idx_posts_posted ON posts(posted_at DESC);
+        CREATE TABLE IF NOT EXISTS hashtag_library (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            hashtag TEXT UNIQUE NOT NULL,
+            category TEXT NOT NULL,
+            popularity TEXT DEFAULT 'medium',
+            post_volume TEXT,
+            description TEXT,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
         CREATE INDEX IF NOT EXISTS idx_snapshots_profile ON follower_snapshots(profile_id);
         CREATE INDEX IF NOT EXISTS idx_snapshots_date ON follower_snapshots(recorded_at);
+        CREATE INDEX IF NOT EXISTS idx_hashtag_lib_cat ON hashtag_library(category);
     """)
     conn.commit()
+
+    # Seed the hashtag library if empty
+    _seed_hashtag_library(conn)
     conn.close()
+
+
+def _seed_hashtag_library(conn):
+    """Populate the hashtag library with curated industry hashtags."""
+    existing = conn.execute("SELECT COUNT(*) as c FROM hashtag_library").fetchone()["c"]
+    if existing > 0:
+        return
+
+    tags = [
+        # ── MedSpa & Aesthetics ──
+        ("medspa", "MedSpa & Aesthetics", "high", "50M+", "Core industry tag — high volume, broad reach"),
+        ("medicalspa", "MedSpa & Aesthetics", "high", "10M+", "Alternative spelling — less saturated than #medspa"),
+        ("medspanearme", "MedSpa & Aesthetics", "medium", "1M+", "Local discovery — patients searching for nearby clinics"),
+        ("medspalife", "MedSpa & Aesthetics", "medium", "500K+", "Lifestyle angle — behind the scenes, culture"),
+        ("medspafacials", "MedSpa & Aesthetics", "medium", "500K+", "Treatment-specific — facial focused content"),
+        ("aestheticmedicine", "MedSpa & Aesthetics", "high", "5M+", "Professional positioning — authority content"),
+        ("aesthetics", "MedSpa & Aesthetics", "high", "30M+", "Broad aesthetic industry tag"),
+        ("aesthetictreatments", "MedSpa & Aesthetics", "medium", "2M+", "Treatment showcase content"),
+        ("medicalesthetics", "MedSpa & Aesthetics", "medium", "1M+", "Professional variant — Canadian/UK spelling too"),
+        ("aestheticclinic", "MedSpa & Aesthetics", "medium", "3M+", "Clinic branding and showcase"),
+
+        # ── Injectables & Botox ──
+        ("botox", "Injectables", "high", "20M+", "Highest volume injectable tag — very competitive"),
+        ("botoxbeforeandafter", "Injectables", "high", "5M+", "Transformation content — high engagement"),
+        ("fillers", "Injectables", "high", "10M+", "Broad filler content"),
+        ("dermalfillers", "Injectables", "high", "8M+", "Professional filler terminology"),
+        ("lipfiller", "Injectables", "high", "15M+", "Top trending procedure — huge patient interest"),
+        ("lipfillers", "Injectables", "high", "10M+", "Plural variant — also very high volume"),
+        ("juvederm", "Injectables", "high", "3M+", "Brand-specific — attracts product-aware patients"),
+        ("restylane", "Injectables", "medium", "1M+", "Brand-specific filler"),
+        ("dysport", "Injectables", "medium", "1M+", "Botox alternative brand — growing awareness"),
+        ("cheekfiller", "Injectables", "medium", "2M+", "Treatment-specific — mid-face content"),
+        ("jawlinefiller", "Injectables", "medium", "1M+", "Trending procedure — sculpting content"),
+        ("chinfiller", "Injectables", "medium", "500K+", "Niche but growing — profile balancing"),
+        ("antiwrinkle", "Injectables", "medium", "2M+", "Patient-friendly term for neuromodulators"),
+        ("injectables", "Injectables", "high", "5M+", "Umbrella injectable content"),
+
+        # ── Plastic Surgery ──
+        ("plasticsurgery", "Plastic Surgery", "high", "25M+", "Core surgery tag — very high volume"),
+        ("plasticsurgeon", "Plastic Surgery", "high", "10M+", "Practitioner positioning"),
+        ("cosmeticsurgery", "Plastic Surgery", "high", "8M+", "Elective procedure focus"),
+        ("rhinoplasty", "Plastic Surgery", "high", "10M+", "Top searched procedure — nose job content"),
+        ("nosejob", "Plastic Surgery", "high", "5M+", "Patient-friendly rhinoplasty term"),
+        ("facelift", "Plastic Surgery", "high", "5M+", "Premium procedure — affluent patient reach"),
+        ("bbl", "Plastic Surgery", "high", "8M+", "Brazilian butt lift — extremely trending"),
+        ("breastaugmentation", "Plastic Surgery", "high", "5M+", "Top procedure by volume"),
+        ("tummytuck", "Plastic Surgery", "high", "5M+", "Body contouring — mommy makeover audience"),
+        ("mommymakeover", "Plastic Surgery", "medium", "2M+", "Package procedure — strong niche"),
+        ("liposuction", "Plastic Surgery", "high", "5M+", "Body sculpting content"),
+        ("beforeandafter", "Plastic Surgery", "high", "50M+", "Universal transformation tag — highest engagement driver"),
+
+        # ── Skincare & Treatments ──
+        ("skincare", "Skincare & Treatments", "high", "100M+", "Massive volume — use with niche tags"),
+        ("skincareroutine", "Skincare & Treatments", "high", "30M+", "Routine/regimen content"),
+        ("glowingskin", "Skincare & Treatments", "high", "20M+", "Aspirational results content"),
+        ("clearskin", "Skincare & Treatments", "high", "15M+", "Results-focused — acne/texture audience"),
+        ("microneedling", "Skincare & Treatments", "high", "5M+", "Trending treatment — collagen induction"),
+        ("chemicalpeel", "Skincare & Treatments", "medium", "3M+", "Classic treatment — resurface content"),
+        ("hydrafacial", "Skincare & Treatments", "high", "3M+", "Branded treatment — huge patient demand"),
+        ("prp", "Skincare & Treatments", "medium", "2M+", "Platelet-rich plasma — vampire facial"),
+        ("lasertreatment", "Skincare & Treatments", "medium", "2M+", "Laser resurfacing and hair removal"),
+        ("laserhairremoval", "Skincare & Treatments", "high", "5M+", "Top non-injectable service"),
+        ("ipl", "Skincare & Treatments", "medium", "1M+", "Intense pulsed light — pigmentation content"),
+        ("morpheus8", "Skincare & Treatments", "medium", "1M+", "Trending RF microneedling device"),
+        ("coolsculpting", "Skincare & Treatments", "medium", "2M+", "Non-surgical fat reduction"),
+
+        # ── Body Contouring ──
+        ("bodycontouring", "Body Contouring", "medium", "3M+", "Non-surgical body shaping umbrella"),
+        ("bodysculpting", "Body Contouring", "medium", "2M+", "Sculpting and toning content"),
+        ("emsculpt", "Body Contouring", "medium", "500K+", "Muscle toning device — trending"),
+        ("nonsurgical", "Body Contouring", "medium", "2M+", "Non-invasive positioning"),
+        ("fatreduction", "Body Contouring", "medium", "1M+", "Results-focused body content"),
+
+        # ── Marketing & Business ──
+        ("medspacmarketing", "Marketing & Business", "low", "100K+", "Industry-specific marketing content"),
+        ("aestheticmarketing", "Marketing & Business", "low", "50K+", "Niche marketing for aesthetics"),
+        ("practicemarketing", "Marketing & Business", "low", "50K+", "Medical practice growth content"),
+        ("medicalpractice", "Marketing & Business", "medium", "500K+", "Practice management audience"),
+        ("patientexperience", "Marketing & Business", "low", "200K+", "Service and experience content"),
+        ("socialmediamarketing", "Marketing & Business", "high", "30M+", "Broad SMM — use sparingly"),
+        ("digitalmarketing", "Marketing & Business", "high", "50M+", "Broad digital — pair with niche tags"),
+        ("healthcaremarketing", "Marketing & Business", "medium", "500K+", "Healthcare-specific marketing"),
+        ("medicalaesthetics", "Marketing & Business", "medium", "2M+", "Professional crossover tag"),
+
+        # ── Trending & Lifestyle ──
+        ("selfcare", "Trending & Lifestyle", "high", "50M+", "Wellness positioning — broad reach"),
+        ("beautytips", "Trending & Lifestyle", "high", "20M+", "Educational beauty content"),
+        ("antiaging", "Trending & Lifestyle", "high", "10M+", "Preventative aesthetics audience"),
+        ("confidenceboost", "Trending & Lifestyle", "medium", "1M+", "Emotional transformation angle"),
+        ("naturalbeauty", "Trending & Lifestyle", "high", "20M+", "Subtle enhancement positioning"),
+        ("lookgoodfeelgood", "Trending & Lifestyle", "medium", "2M+", "Aspirational results content"),
+        ("beautycommunity", "Trending & Lifestyle", "high", "5M+", "Community building tag"),
+        ("skingoals", "Trending & Lifestyle", "medium", "3M+", "Aspirational skin results"),
+        ("glowup", "Trending & Lifestyle", "high", "10M+", "Transformation content — viral potential"),
+        ("investinyourself", "Trending & Lifestyle", "medium", "2M+", "Premium positioning — affluent audience"),
+    ]
+
+    conn.executemany(
+        "INSERT OR IGNORE INTO hashtag_library (hashtag, category, popularity, post_volume, description) VALUES (?, ?, ?, ?, ?)",
+        tags,
+    )
+    conn.commit()
 
 
 # ── Profile CRUD ─────────────────────────────────────────────────────
