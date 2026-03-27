@@ -430,6 +430,7 @@
                 <option value="engagement_rate">Sort by Engagement Rate</option>
                 <option value="likes">Sort by Likes</option>
                 <option value="comments">Sort by Comments</option>
+                <option value="shares">Sort by Shares</option>
                 <option value="video_views">Sort by Video Views</option>
             </select>
             <select id="topDays" onchange="loadTopPosts()">
@@ -513,6 +514,7 @@
                 <option value="engagement_rate">Engagement Rate</option>
                 <option value="likes">Likes</option>
                 <option value="comments">Comments</option>
+                <option value="shares">Shares</option>
                 <option value="video_views">Video Views</option>
                 <option value="posted_at">Date Posted</option>
             </select>
@@ -793,6 +795,7 @@ function renderPostsTable(posts, compact = false) {
             <th>Caption</th>
             <th>Likes</th>
             <th>Comments</th>
+            <th>Shares</th>
             ${!compact ? '<th>Views</th>' : ''}
             <th>Eng. Rate</th>
             <th>Posted</th>
@@ -814,6 +817,7 @@ function renderPostsTable(posts, compact = false) {
             <td><div class="caption-preview" title="${(p.caption||'').replace(/"/g, '&quot;')}">${truncate(p.caption, 60)}</div></td>
             <td class="metric">${formatNumber(p.likes)}</td>
             <td class="metric">${formatNumber(p.comments)}</td>
+            <td class="metric">${formatNumber(p.shares || 0)}</td>
             ${!compact ? `<td class="metric">${p.is_video ? formatNumber(p.video_views) : '—'}</td>` : ''}
             <td class="metric ${engagementColor(p.engagement_rate)}">${p.engagement_rate.toFixed(2)}%</td>
             <td style="color: var(--text-secondary); font-size: 12px">${timeAgo(p.posted_at)}</td>

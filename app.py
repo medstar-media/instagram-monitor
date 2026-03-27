@@ -162,7 +162,7 @@ def get_posts():
 
     # Whitelist sortable columns
     allowed_sorts = {
-        "engagement_rate", "likes", "comments", "video_views",
+        "engagement_rate", "likes", "comments", "shares", "video_views",
         "posted_at", "scraped_at"
     }
     if sort not in allowed_sorts:
@@ -238,7 +238,7 @@ def get_top_posts():
     limit = min(int(request.args.get("limit", 20)), 100)
     days = request.args.get("days", "30")
 
-    allowed_metrics = {"engagement_rate", "likes", "comments", "video_views"}
+    allowed_metrics = {"engagement_rate", "likes", "comments", "shares", "video_views"}
     if metric not in allowed_metrics:
         metric = "engagement_rate"
 
@@ -514,7 +514,8 @@ def scraper_js():
           var first=item.carousel_media[0];
           if(first.image_versions2&&first.image_versions2.candidates)thumb=first.image_versions2.candidates[0].url;
         }}
-        return {{shortcode:code,post_url:'https://www.instagram.com/p/'+code+'/',caption:caption,post_type:postType,likes:likes,comments:comments,video_views:isVideo?(item.play_count||item.view_count||0):0,engagement_rate:er,posted_at:postedAt,thumbnail_url:thumb,is_video:isVideo,hashtags:JSON.stringify(hashtags)}};
+        var shares=item.reshare_count||item.share_count||0;
+        return {{shortcode:code,post_url:'https://www.instagram.com/p/'+code+'/',caption:caption,post_type:postType,likes:likes,comments:comments,shares:shares,video_views:isVideo?(item.play_count||item.view_count||0):0,engagement_rate:er,posted_at:postedAt,thumbnail_url:thumb,is_video:isVideo,hashtags:JSON.stringify(hashtags)}};
       }});
 
       bar.style.width='90%';

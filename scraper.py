@@ -86,6 +86,7 @@ def init_db():
             post_type TEXT,
             likes INTEGER DEFAULT 0,
             comments INTEGER DEFAULT 0,
+            shares INTEGER DEFAULT 0,
             video_views INTEGER DEFAULT 0,
             engagement_rate REAL DEFAULT 0.0,
             posted_at TIMESTAMP,
@@ -108,6 +109,11 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_posts_likes ON posts(likes DESC);
         CREATE INDEX IF NOT EXISTS idx_posts_posted ON posts(posted_at DESC);
     """)
+    # Migration: add shares column if missing (for existing databases)
+    try:
+        cursor.execute("SELECT shares FROM posts LIMIT 1")
+    except sqlite3.OperationalError:
+        cursor.execute("ALTER TABLE posts ADD COLUMN shares INTEGER DEFAULT 0")
     conn.commit()
     conn.close()
 
@@ -359,19 +365,20 @@ def save_scrape_results(result):
             conn.execute("""
                 INSERT INTO posts (
                     profile_id, shortcode, post_url, caption, post_type,
-                    likes, comments, video_views, engagement_rate,
+                    likes, comments, shares, video_views, engagement_rate,
                     posted_at, thumbnail_url, is_video, hashtags
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(shortcode) DO UPDATE SET
                     likes = excluded.likes,
                     comments = excluded.comments,
+                    shares = excluded.shares,
                     video_views = excluded.video_views,
                     engagement_rate = excluded.engagement_rate,
                     scraped_at = CURRENT_TIMESTAMP
             """, (
                 profile_id, post["shortcode"], post["post_url"],
                 post["caption"], post["post_type"], post["likes"],
-                post["comments"], post["video_views"],
+                post["comments"], post.get("shares", 0), post["video_views"],
                 post["engagement_rate"], post["posted_at"],
                 post["thumbnail_url"], 1 if post["is_video"] else 0,
                 post["hashtags"],
