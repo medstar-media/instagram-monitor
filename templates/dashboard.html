@@ -1306,7 +1306,15 @@ async function loadTimingHeatmap() {
 }
 
 // ─── Load Growth Chart ───
-let chartGrowth = null;
+function destroyGrowthChart() {
+    // Destroy any existing chart on the growth canvas, regardless of variable state
+    const canvas = document.getElementById('chartGrowth');
+    if (canvas) {
+        const existing = Chart.getChart(canvas);
+        if (existing) existing.destroy();
+    }
+}
+
 function ensureGrowthCanvas() {
     const wrapper = document.getElementById('growthChartWrapper');
     if (!wrapper) return null;
@@ -1328,7 +1336,7 @@ async function loadGrowth() {
     const wrapper = document.getElementById('growthChartWrapper');
 
     if (!data || data.length === 0) {
-        if (chartGrowth) { chartGrowth.destroy(); chartGrowth = null; }
+        destroyGrowthChart();
         wrapper.innerHTML = '<div class="empty-state" style="height:400px;display:flex;align-items:center;justify-content:center"><p>No growth data yet. Data will appear after profiles are re-scraped over time.</p></div>';
         loadGrowthTips(null);
         return;
@@ -1352,10 +1360,10 @@ async function loadGrowth() {
         pointRadius: 3,
     }));
 
-    if (chartGrowth) { chartGrowth.destroy(); chartGrowth = null; }
+    destroyGrowthChart();
     const canvas = ensureGrowthCanvas();
     wrapper.style.height = '400px';
-    chartGrowth = new Chart(canvas, {
+    new Chart(canvas, {
         type: 'line',
         data: {datasets},
         options: {
