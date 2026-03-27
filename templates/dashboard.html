@@ -701,7 +701,14 @@
         </div>
         <div class="panel">
             <div class="panel-body">
-                <div class="chart-container" style="height:400px"><canvas id="chartGrowth"></canvas></div>
+                <div id="growthChartWrapper" style="height:400px"><canvas id="chartGrowth"></canvas></div>
+            </div>
+        </div>
+
+        <div class="panel" style="margin-top:16px">
+            <div class="panel-header"><h3>📋 Growth Tips for @medstarmedia</h3></div>
+            <div class="panel-body" id="growthTipsPanel" style="font-size:13px;color:var(--text-secondary);line-height:1.7;">
+                <div id="growthTipsContent"></div>
             </div>
         </div>
     </div>
@@ -1300,6 +1307,17 @@ async function loadTimingHeatmap() {
 
 // ─── Load Growth Chart ───
 let chartGrowth = null;
+function ensureGrowthCanvas() {
+    const wrapper = document.getElementById('growthChartWrapper');
+    if (!wrapper) return null;
+    let canvas = document.getElementById('chartGrowth');
+    if (!canvas) {
+        wrapper.innerHTML = '<canvas id="chartGrowth"></canvas>';
+        canvas = document.getElementById('chartGrowth');
+    }
+    return canvas;
+}
+
 async function loadGrowth() {
     const days = document.getElementById('growthDays').value;
     const profile = document.getElementById('growthProfile').value;
@@ -1307,10 +1325,12 @@ async function loadGrowth() {
     if (profile) params.set('profile', profile);
 
     const data = await api('/api/growth?' + params);
+    const wrapper = document.getElementById('growthChartWrapper');
+
     if (!data || data.length === 0) {
-        if (chartGrowth) chartGrowth.destroy();
-        document.getElementById('chartGrowth').parentElement.innerHTML =
-            '<div class="empty-state"><p>No growth data yet. Data will appear after the first re-scrape.</p></div>';
+        if (chartGrowth) { chartGrowth.destroy(); chartGrowth = null; }
+        wrapper.innerHTML = '<div class="empty-state" style="height:400px;display:flex;align-items:center;justify-content:center"><p>No growth data yet. Data will appear after profiles are re-scraped over time.</p></div>';
+        loadGrowthTips(null);
         return;
     }
 
@@ -1332,8 +1352,10 @@ async function loadGrowth() {
         pointRadius: 3,
     }));
 
-    if (chartGrowth) chartGrowth.destroy();
-    chartGrowth = new Chart(document.getElementById('chartGrowth'), {
+    if (chartGrowth) { chartGrowth.destroy(); chartGrowth = null; }
+    const canvas = ensureGrowthCanvas();
+    wrapper.style.height = '400px';
+    chartGrowth = new Chart(canvas, {
         type: 'line',
         data: {datasets},
         options: {
@@ -1353,6 +1375,33 @@ async function loadGrowth() {
             }
         }
     });
+
+    loadGrowthTips(byProfile);
+}
+
+// ─── Growth Tips ───
+async function loadGrowthTips(byProfile) {
+    const el = document.getElementById('growthTipsContent');
+    if (!el) return;
+
+    const profile = document.getElementById('growthProfile').value || 'medstarmedia';
+    const data = await api('/api/growth-tips?profile=' + encodeURIComponent(profile));
+    if (!data || !data.tips || data.tips.length === 0) {
+        el.innerHTML = '<p style="color:var(--text-muted)">No tips available yet.</p>';
+        return;
+    }
+
+    let html = '';
+    data.tips.forEach(tip => {
+        html += `<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:20px;flex-shrink:0">${tip.icon}</span>
+            <div>
+                <strong style="color:var(--text-primary);font-size:13px">${tip.title}</strong>
+                <p style="margin:4px 0 0;font-size:12.5px;color:var(--text-secondary);line-height:1.6">${tip.text}</p>
+            </div>
+        </div>`;
+    });
+    el.innerHTML = html;
 }
 
 // ─── Industry Hashtags ───

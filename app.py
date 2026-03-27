@@ -592,6 +592,215 @@ def get_viral_posts():
     return jsonify([dict(p) for p in posts])
 
 
+@app.route("/api/growth-tips", methods=["GET"])
+def get_growth_tips():
+    """Generate data-driven growth tips for a profile (defaults to medstarmedia)."""
+    import re as _re
+    profile_filter = request.args.get("profile", "medstarmedia")
+
+    conn = get_db()
+
+    # Get profile info
+    profile = conn.execute(
+        "SELECT * FROM profiles WHERE username = ?", (profile_filter,)
+    ).fetchone()
+    if not profile:
+        conn.close()
+        return jsonify({"tips": [{"icon": "ℹ️", "title": "No Data", "text": "Profile not found. Scrape it first."}]})
+
+    profile_id = profile["id"]
+    follower_count = profile["follower_count"] or 0
+
+    # Get post stats
+    posts = conn.execute("""
+        SELECT po.engagement_rate, po.likes, po.comments, po.post_type,
+               po.caption, po.posted_at, po.video_views
+        FROM posts po WHERE po.profile_id = ?
+        ORDER BY po.posted_at DESC
+    """, (profile_id,)).fetchall()
+
+    # Get growth snapshots
+    snapshots = conn.execute("""
+        SELECT follower_count, recorded_at FROM follower_snapshots
+        WHERE profile_id = ? ORDER BY recorded_at ASC
+    """, (profile_id,)).fetchall()
+
+    # Get all profiles for comparison
+    all_profiles = conn.execute("""
+        SELECT pr.username, pr.follower_count,
+               AVG(po.engagement_rate) as avg_er,
+               COUNT(po.id) as post_count
+        FROM profiles pr
+        LEFT JOIN posts po ON pr.id = po.profile_id
+        GROUP BY pr.id
+    """).fetchall()
+    conn.close()
+
+    tips = []
+
+    if not posts:
+        return jsonify({"tips": [{"icon": "📊", "title": "No Posts Yet", "text": f"Scrape @{profile_filter} to get growth insights."}]})
+
+    # --- Compute metrics ---
+    total_posts = len(posts)
+    avg_er = sum(p["engagement_rate"] for p in posts) / total_posts
+    avg_likes = sum(p["likes"] for p in posts) / total_posts
+    avg_comments = sum(p["comments"] for p in posts) / total_posts
+    lc_ratio = round(avg_likes / avg_comments, 1) if avg_comments > 0 else 0
+
+    # Post type breakdown
+    type_counts = {}
+    type_er = {}
+    for p in posts:
+        t = p["post_type"] or "unknown"
+        type_counts[t] = type_counts.get(t, 0) + 1
+        type_er.setdefault(t, []).append(p["engagement_rate"])
+    best_type = max(type_er, key=lambda t: sum(type_er[t]) / len(type_er[t])) if type_er else None
+    best_type_er = round(sum(type_er[best_type]) / len(type_er[best_type]) * 100, 2) if best_type else 0
+
+    # Posting time analysis
+    hour_er = {}
+    for p in posts:
+        try:
+            dt = datetime.fromisoformat(p["posted_at"].replace("Z", "+00:00"))
+            h = dt.hour
+            hour_er.setdefault(h, []).append(p["engagement_rate"])
+        except Exception:
+            pass
+    best_hour = max(hour_er, key=lambda h: sum(hour_er[h]) / len(hour_er[h])) if hour_er else None
+
+    # Hashtag analysis
+    all_tags = {}
+    for p in posts:
+        tags = _re.findall(r"#(\w+)", p["caption"] or "")
+        for tag in tags:
+            tag = tag.lower()
+            all_tags.setdefault(tag, []).append(p["engagement_rate"])
+    top_tags = sorted(all_tags.items(), key=lambda x: sum(x[1]) / len(x[1]), reverse=True)[:5]
+
+    # Caption length analysis
+    short_captions = [p for p in posts if len(p["caption"] or "") < 100]
+    long_captions = [p for p in posts if len(p["caption"] or "") >= 300]
+    short_er = sum(p["engagement_rate"] for p in short_captions) / len(short_captions) if short_captions else 0
+    long_er = sum(p["engagement_rate"] for p in long_captions) / len(long_captions) if long_captions else 0
+
+    # Comparison to top performer
+    top_profile = max(all_profiles, key=lambda p: p["avg_er"] or 0) if all_profiles else None
+
+    # --- Generate tips ---
+
+    # 1. Overall health
+    tips.append({
+        "icon": "📊",
+        "title": "Engagement Overview",
+        "text": f"@{profile_filter} averages {round(avg_er * 100, 2)}% engagement across {total_posts} posts ({round(avg_likes)} likes, {round(avg_comments)} comments per post). "
+                + ("Great engagement rate! Keep it up." if avg_er >= 0.03 else
+                   "Solid engagement — aim for 3%+ to stand out." if avg_er >= 0.015 else
+                   "Engagement is below 1.5%. Focus on hooks, CTAs, and Reels to boost interaction.")
+    })
+
+    # 2. Content type recommendation
+    if best_type:
+        type_label = best_type.replace("_", " ").title()
+        tips.append({
+            "icon": "🎬",
+            "title": f"Double Down on {type_label}",
+            "text": f"{type_label} posts average {best_type_er}% engagement — your strongest format. "
+                    + ("Consider increasing Reels output to 4-5 per week for maximum reach." if "reel" in best_type.lower() or "video" in best_type.lower()
+                       else f"Mix more {type_label} content into your calendar for consistent performance.")
+        })
+
+    # 3. Best posting time
+    if best_hour is not None:
+        period = "AM" if best_hour < 12 else "PM"
+        display_hour = best_hour if best_hour <= 12 else best_hour - 12
+        if display_hour == 0:
+            display_hour = 12
+        best_hour_er = round(sum(hour_er[best_hour]) / len(hour_er[best_hour]) * 100, 2)
+        tips.append({
+            "icon": "⏰",
+            "title": f"Best Posting Time: {display_hour} {period}",
+            "text": f"Posts around {display_hour} {period} average {best_hour_er}% engagement. Schedule content during this window for maximum visibility. Consistency in posting times trains the algorithm to boost your content."
+        })
+
+    # 4. Likes-to-comments ratio insight
+    if lc_ratio > 0:
+        tips.append({
+            "icon": "💬",
+            "title": f"Likes-to-Comments Ratio: {lc_ratio}:1",
+            "text": ("Your audience is highly engaged in conversation — that's a strong community signal!" if lc_ratio < 15 else
+                     "Solid ratio. Add more CTAs like 'Drop a 🔥 if you agree' or ask questions to boost comment rates." if lc_ratio < 30 else
+                     "High like-to-comment ratio suggests passive engagement. Use carousel posts with questions, polls in Stories, and strong CTAs to spark more comments.")
+        })
+
+    # 5. Caption length tip
+    if short_captions and long_captions:
+        if long_er > short_er:
+            tips.append({
+                "icon": "📝",
+                "title": "Longer Captions Win",
+                "text": f"Posts with 300+ character captions average {round(long_er * 100, 2)}% engagement vs {round(short_er * 100, 2)}% for short ones. Tell stories, share value, and use line breaks for readability."
+            })
+        else:
+            tips.append({
+                "icon": "📝",
+                "title": "Keep Captions Punchy",
+                "text": f"Shorter captions ({round(short_er * 100, 2)}% ER) outperform long ones ({round(long_er * 100, 2)}% ER). Lead with a hook, keep it concise, and put the CTA above the fold."
+            })
+
+    # 6. Top hashtag performance
+    if top_tags:
+        tag_list = ", ".join([f"#{t[0]}" for t in top_tags])
+        tips.append({
+            "icon": "#️⃣",
+            "title": "Top Performing Hashtags",
+            "text": f"Your highest-engaging hashtags: {tag_list}. Rotate these with trending tags from the Industry Library to maximize discoverability."
+        })
+
+    # 7. Competitive benchmark
+    if top_profile and top_profile["username"] != profile_filter:
+        tips.append({
+            "icon": "🏆",
+            "title": "Benchmark vs Top Performer",
+            "text": f"@{top_profile['username']} leads with {round((top_profile['avg_er'] or 0) * 100, 2)}% avg engagement and {formatNumber_py(top_profile['follower_count'])} followers. Study their content style, posting cadence, and hooks for inspiration."
+        })
+
+    # 8. Follower growth insight
+    if len(snapshots) >= 2:
+        first = snapshots[0]["follower_count"]
+        last = snapshots[-1]["follower_count"]
+        diff = last - first
+        pct = round((diff / first) * 100, 2) if first > 0 else 0
+        direction = "📈" if diff > 0 else "📉" if diff < 0 else "➡️"
+        tips.append({
+            "icon": direction,
+            "title": f"Follower Trend: {'+' if diff >= 0 else ''}{diff} ({pct}%)",
+            "text": ("Growth is trending up — keep your current strategy and scale what works." if diff > 0 else
+                     "Followers are declining. Audit recent content, increase Reels output, engage with comments within the first hour, and collaborate with peers in the medspa niche." if diff < 0 else
+                     "Follower count is stable. To accelerate growth, try collaborations, giveaways, or trending audio Reels.")
+        })
+
+    # 9. Medspa-specific growth plays
+    tips.append({
+        "icon": "🚀",
+        "title": "MedSpa Growth Plays",
+        "text": "Proven tactics for aesthetic/medspa accounts: Before & After carousels (highest save rate), patient testimonial Reels, 'Day in the Life' Stories, provider Q&A sessions, and seasonal treatment spotlights. Use the Industry Tags library for niche-specific hashtags."
+    })
+
+    return jsonify({"tips": tips, "profile": profile_filter})
+
+
+def formatNumber_py(n):
+    """Format large numbers with K/M suffix for tips."""
+    if n is None:
+        return "0"
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.1f}K"
+    return str(n)
+
+
 @app.route("/api/export", methods=["GET"])
 def export_data():
     """Export all post data as JSON."""
