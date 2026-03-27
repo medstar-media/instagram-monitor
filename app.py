@@ -7,11 +7,22 @@ import os
 import json
 import threading
 from datetime import datetime
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify, redirect, url_for, make_response
 from scraper import init_db, get_db, add_profile, remove_profile, scrape_profile, save_scrape_results, scrape_all_profiles
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
+
+
+@app.after_request
+def add_cors_headers(response):
+    """Allow cross-origin requests from Instagram for browser-assisted scraping."""
+    origin = request.headers.get("Origin", "")
+    if origin in ("https://www.instagram.com", "https://instagram.com"):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
 
 # Initialize database on startup
 init_db()
@@ -372,6 +383,40 @@ def export_data():
         "total_posts": len(posts),
         "posts": [dict(p) for p in posts]
     })
+
+
+@app.route("/api/browser-scrape", methods=["POST", "OPTIONS"])
+def browser_scrape():
+    """Accept scraped profile data sent from the user's browser.
+    The browser fetches Instagram data (using its own cookies) and POSTs here."""
+    if request.method == "OPTIONS":
+        return "", 204
+    data = request.json
+    if not data:
+        return jsonify({"error": "No data received"}), 400
+    result = data.get("result")
+    if not result or not result.get("success"):
+        return jsonify({"error": "Invalid scrape result"}), 400
+    save_scrape_results(result)
+    return jsonify({"message": f"Saved {len(result.get('posts', []))} posts for @{result['profile']['username']}"})
+
+
+@app.route("/api/session", methods=["GET"])
+def get_session_status():
+    """Check if a session cookie is configured."""
+    has_session = bool(os.environ.get("IG_SESSION_ID", ""))
+    return jsonify({"has_session": has_session})
+
+
+@app.route("/api/session", methods=["POST"])
+def set_session():
+    """Set the Instagram session cookie at runtime."""
+    data = request.json
+    session_id = data.get("session_id", "").strip()
+    if not session_id:
+        return jsonify({"error": "session_id is required"}), 400
+    os.environ["IG_SESSION_ID"] = session_id
+    return jsonify({"message": "Session cookie saved successfully."})
 
 
 if __name__ == "__main__":

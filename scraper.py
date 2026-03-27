@@ -1,27 +1,39 @@
 """
 Instagram Scraper Module
 Scrapes public Instagram profiles for post data and engagement metrics.
-Uses Instaloader library for reliable data extraction.
+Uses requests with Instagram's web API for reliable cloud-based extraction.
 """
 
-import instaloader
+import requests as req
 import time
 import random
 import json
 import os
+import re
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 
+# ── Shared browser-like headers ──────────────────────────────────────
+_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "*/*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "X-IG-App-ID": "936619743392459",
+    "X-Requested-With": "XMLHttpRequest",
+    "Referer": "https://www.instagram.com/",
+    "Origin": "https://www.instagram.com",
+}
+
+# ── Database helpers ─────────────────────────────────────────────────
+
 def _get_db_path():
     """Determine the best location for the database file."""
-    # Allow override via environment variable
     env_path = os.environ.get("IG_MONITOR_DB")
     if env_path:
         return env_path
-    # Default: same directory as the script
     default = os.path.join(os.path.dirname(os.path.abspath(__file__)), "monitor.db")
-    # Test if the directory supports SQLite (some network/mounted dirs don't)
     try:
         import tempfile
         test_path = default + ".test"
@@ -31,7 +43,6 @@ def _get_db_path():
         os.remove(test_path)
         return default
     except Exception:
-        # Fallback to home directory
         fallback_dir = os.path.join(os.path.expanduser("~"), ".ig-monitor")
         os.makedirs(fallback_dir, exist_ok=True)
         return os.path.join(fallback_dir, "monitor.db")
@@ -51,7 +62,6 @@ def init_db():
     """Initialize the SQLite database with required tables."""
     conn = get_db()
     cursor = conn.cursor()
-
     cursor.executescript("""
         CREATE TABLE IF NOT EXISTS profiles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,7 +77,6 @@ def init_db():
             added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_scraped TIMESTAMP
         );
-
         CREATE TABLE IF NOT EXISTS posts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             profile_id INTEGER NOT NULL,
@@ -86,7 +95,6 @@ def init_db():
             hashtags TEXT,
             FOREIGN KEY (profile_id) REFERENCES profiles(id)
         );
-
         CREATE TABLE IF NOT EXISTS scrape_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             profile_id INTEGER,
@@ -95,24 +103,23 @@ def init_db():
             scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (profile_id) REFERENCES profiles(id)
         );
-
         CREATE INDEX IF NOT EXISTS idx_posts_profile ON posts(profile_id);
         CREATE INDEX IF NOT EXISTS idx_posts_engagement ON posts(engagement_rate DESC);
         CREATE INDEX IF NOT EXISTS idx_posts_likes ON posts(likes DESC);
         CREATE INDEX IF NOT EXISTS idx_posts_posted ON posts(posted_at DESC);
     """)
-
     conn.commit()
     conn.close()
 
 
+# ── Profile CRUD ─────────────────────────────────────────────────────
+
 def add_profile(username, category="Uncategorized"):
-    """Add a new Instagram profile to monitor."""
     conn = get_db()
     try:
         conn.execute(
             "INSERT OR IGNORE INTO profiles (username, category) VALUES (?, ?)",
-            (username.lower().strip().lstrip("@"), category)
+            (username.lower().strip().lstrip("@"), category),
         )
         conn.commit()
         return True
@@ -124,12 +131,11 @@ def add_profile(username, category="Uncategorized"):
 
 
 def remove_profile(username):
-    """Remove a profile and its posts from monitoring."""
     conn = get_db()
     try:
         profile = conn.execute(
             "SELECT id FROM profiles WHERE username = ?",
-            (username.lower().strip(),)
+            (username.lower().strip(),),
         ).fetchone()
         if profile:
             conn.execute("DELETE FROM posts WHERE profile_id = ?", (profile["id"],))
@@ -142,183 +148,213 @@ def remove_profile(username):
         conn.close()
 
 
-def _get_instaloader():
+# ── Session builder ──────────────────────────────────────────────────
+
+def _build_session():
     """
-    Create an Instaloader instance, optionally logged in via environment
-    variables IG_USERNAME + IG_PASSWORD or IG_SESSION_FILE.
-    Logging in avoids 403 blocks from cloud / datacenter IPs.
+    Build a requests.Session with Instagram cookies.
+    Reads IG_SESSION_ID from environment (set via Railway Variables or
+    the /api/set-session endpoint in the dashboard).
     """
-    L = instaloader.Instaloader(
-        download_pictures=False,
-        download_videos=False,
-        download_video_thumbnails=False,
-        download_geotags=False,
-        download_comments=False,
-        save_metadata=False,
-        compress_json=False,
-        quiet=True
-    )
+    s = req.Session()
+    s.headers.update(_HEADERS)
 
-    # Try session file first (most reliable)
-    session_file = os.environ.get("IG_SESSION_FILE")
-    if session_file and os.path.exists(session_file):
-        try:
-            L.load_session_from_file(
-                os.environ.get("IG_USERNAME", ""), session_file
-            )
-            print("[auth] Loaded Instagram session from file")
-            return L
-        except Exception as e:
-            print(f"[auth] Session file load failed: {e}")
+    session_id = os.environ.get("IG_SESSION_ID", "")
+    if session_id:
+        s.cookies.set("sessionid", session_id, domain=".instagram.com")
+        print("[auth] Using IG_SESSION_ID cookie")
+    else:
+        print("[auth] WARNING: No IG_SESSION_ID set — scraping will likely fail from cloud IPs.")
+    return s
 
-    # Try username + password login
-    ig_user = os.environ.get("IG_USERNAME")
-    ig_pass = os.environ.get("IG_PASSWORD")
-    if ig_user and ig_pass:
-        try:
-            L.login(ig_user, ig_pass)
-            print(f"[auth] Logged in to Instagram as {ig_user}")
-            return L
-        except Exception as e:
-            print(f"[auth] Login failed: {e}")
 
-    # Try importing a session cookie directly (sessionid)
-    ig_session_id = os.environ.get("IG_SESSION_ID")
-    if ig_session_id:
-        try:
-            import requests
-            session = requests.Session()
-            session.cookies.set("sessionid", ig_session_id, domain=".instagram.com")
-            L.context._session = session
-            print("[auth] Loaded Instagram session cookie")
-            return L
-        except Exception as e:
-            print(f"[auth] Session cookie load failed: {e}")
-
-    print("[auth] WARNING: No Instagram credentials set. Scraping may fail from cloud IPs.")
-    print("[auth] Set IG_USERNAME + IG_PASSWORD or IG_SESSION_ID in Railway environment variables.")
-    return L
-
+# ── Scraping ─────────────────────────────────────────────────────────
 
 def scrape_profile(username, max_posts=30):
     """
-    Scrape a single Instagram profile for posts and engagement data.
+    Scrape a single Instagram profile using the web API.
     Returns dict with profile info and list of posts.
     """
-    L = _get_instaloader()
+    session = _build_session()
+    username = username.lower().strip().lstrip("@")
+
+    # ── Step 1: Fetch profile info via web_profile_info endpoint ──
+    profile_url = (
+        f"https://www.instagram.com/api/v1/users/web_profile_info/"
+        f"?username={username}"
+    )
+    try:
+        resp = session.get(profile_url, timeout=15)
+    except Exception as e:
+        return {"success": False, "error": f"Network error: {e}"}
+
+    if resp.status_code == 404:
+        return {"success": False, "error": f"Profile '{username}' does not exist."}
+    if resp.status_code == 401:
+        return {"success": False, "error": "Session expired. Please update your session cookie via the Settings page on the dashboard."}
+    if resp.status_code == 403:
+        return {"success": False, "error": "Instagram blocked the request. Please set or update your session cookie via the Settings page on the dashboard."}
+    if resp.status_code != 200:
+        return {"success": False, "error": f"Instagram returned status {resp.status_code}. Try updating your session cookie."}
 
     try:
-        profile = instaloader.Profile.from_username(L.context, username)
+        data = resp.json()
+    except Exception:
+        return {"success": False, "error": "Could not parse Instagram response. Try updating your session cookie."}
 
-        profile_data = {
-            "username": profile.username,
-            "full_name": profile.full_name,
-            "follower_count": profile.followers,
-            "following_count": profile.followees,
-            "post_count": profile.mediacount,
-            "bio": profile.biography,
-            "profile_pic_url": profile.profile_pic_url,
-            "is_verified": profile.is_verified,
-        }
+    user = data.get("data", {}).get("user")
+    if not user:
+        return {"success": False, "error": f"Profile '{username}' not found or is private."}
 
-        posts = []
-        count = 0
-        for post in profile.get_posts():
-            if count >= max_posts:
+    follower_count = user.get("edge_followed_by", {}).get("count", 0)
+    profile_data = {
+        "username": user.get("username", username),
+        "full_name": user.get("full_name", ""),
+        "follower_count": follower_count,
+        "following_count": user.get("edge_follow", {}).get("count", 0),
+        "post_count": user.get("edge_owner_to_timeline_media", {}).get("count", 0),
+        "bio": user.get("biography", ""),
+        "profile_pic_url": user.get("profile_pic_url_hd", user.get("profile_pic_url", "")),
+        "is_verified": user.get("is_verified", False),
+    }
+
+    # ── Step 2: Extract posts from the same response ──
+    timeline = user.get("edge_owner_to_timeline_media", {})
+    edges = timeline.get("edges", [])
+    posts = []
+
+    for edge in edges[:max_posts]:
+        node = edge.get("node", {})
+        likes = node.get("edge_liked_by", {}).get("count", 0)
+        comments = node.get("edge_media_to_comment", {}).get("count", 0)
+        is_video = node.get("is_video", False)
+        typename = node.get("__typename", "")
+
+        engagement_rate = 0.0
+        if follower_count > 0:
+            engagement_rate = round(((likes + comments) / follower_count) * 100, 4)
+
+        caption_edges = node.get("edge_media_to_caption", {}).get("edges", [])
+        caption = caption_edges[0]["node"]["text"] if caption_edges else ""
+
+        hashtags = re.findall(r"#(\w+)", caption)
+
+        if typename == "GraphSidecar":
+            post_type = "carousel"
+        elif is_video:
+            post_type = "video"
+        else:
+            post_type = "image"
+
+        posted_ts = node.get("taken_at_timestamp", 0)
+        posted_at = datetime.utcfromtimestamp(posted_ts).isoformat() if posted_ts else ""
+
+        posts.append({
+            "shortcode": node.get("shortcode", ""),
+            "post_url": f"https://www.instagram.com/p/{node.get('shortcode', '')}/",
+            "caption": caption,
+            "post_type": post_type,
+            "likes": likes,
+            "comments": comments,
+            "video_views": node.get("video_view_count", 0) if is_video else 0,
+            "engagement_rate": engagement_rate,
+            "posted_at": posted_at,
+            "thumbnail_url": node.get("thumbnail_src", node.get("display_url", "")),
+            "is_video": is_video,
+            "hashtags": json.dumps(hashtags),
+        })
+
+    # ── Step 3: If we need more posts, paginate ──
+    has_next = timeline.get("page_info", {}).get("has_next_page", False)
+    end_cursor = timeline.get("page_info", {}).get("end_cursor", "")
+    user_id = user.get("id", "")
+
+    while has_next and len(posts) < max_posts and end_cursor and user_id:
+        time.sleep(random.uniform(1.0, 2.5))
+        variables = json.dumps({"id": user_id, "first": 12, "after": end_cursor})
+        next_url = (
+            f"https://www.instagram.com/graphql/query/"
+            f"?query_hash=e769aa130647d2571c27c44596cb68bd&variables={variables}"
+        )
+        try:
+            resp2 = session.get(next_url, timeout=15)
+            if resp2.status_code != 200:
                 break
+            page_data = resp2.json()
+            media = page_data.get("data", {}).get("user", {}).get("edge_owner_to_timeline_media", {})
+            for edge in media.get("edges", []):
+                if len(posts) >= max_posts:
+                    break
+                node = edge.get("node", {})
+                likes = node.get("edge_liked_by", {}).get("count", 0)
+                comments = node.get("edge_media_to_comment", {}).get("count", 0)
+                is_video = node.get("is_video", False)
+                typename = node.get("__typename", "")
+                engagement_rate = 0.0
+                if follower_count > 0:
+                    engagement_rate = round(((likes + comments) / follower_count) * 100, 4)
+                caption_edges = node.get("edge_media_to_caption", {}).get("edges", [])
+                caption = caption_edges[0]["node"]["text"] if caption_edges else ""
+                hashtags = re.findall(r"#(\w+)", caption)
+                if typename == "GraphSidecar":
+                    post_type = "carousel"
+                elif is_video:
+                    post_type = "video"
+                else:
+                    post_type = "image"
+                posted_ts = node.get("taken_at_timestamp", 0)
+                posted_at = datetime.utcfromtimestamp(posted_ts).isoformat() if posted_ts else ""
+                posts.append({
+                    "shortcode": node.get("shortcode", ""),
+                    "post_url": f"https://www.instagram.com/p/{node.get('shortcode', '')}/",
+                    "caption": caption,
+                    "post_type": post_type,
+                    "likes": likes,
+                    "comments": comments,
+                    "video_views": node.get("video_view_count", 0) if is_video else 0,
+                    "engagement_rate": engagement_rate,
+                    "posted_at": posted_at,
+                    "thumbnail_url": node.get("thumbnail_src", node.get("display_url", "")),
+                    "is_video": is_video,
+                    "hashtags": json.dumps(hashtags),
+                })
+            has_next = media.get("page_info", {}).get("has_next_page", False)
+            end_cursor = media.get("page_info", {}).get("end_cursor", "")
+        except Exception:
+            break
 
-            # Calculate engagement rate
-            total_engagement = post.likes + post.comments
-            engagement_rate = 0.0
-            if profile.followers > 0:
-                engagement_rate = round((total_engagement / profile.followers) * 100, 4)
+    return {"profile": profile_data, "posts": posts, "success": True}
 
-            # Extract hashtags from caption
-            hashtags = []
-            if post.caption_hashtags:
-                hashtags = post.caption_hashtags
 
-            post_data = {
-                "shortcode": post.shortcode,
-                "post_url": f"https://www.instagram.com/p/{post.shortcode}/",
-                "caption": post.caption or "",
-                "post_type": "video" if post.is_video else ("carousel" if post.typename == "GraphSidecar" else "image"),
-                "likes": post.likes,
-                "comments": post.comments,
-                "video_views": post.video_view_count if post.is_video else 0,
-                "engagement_rate": engagement_rate,
-                "posted_at": post.date_utc.isoformat(),
-                "thumbnail_url": post.url,
-                "is_video": post.is_video,
-                "hashtags": json.dumps(hashtags),
-            }
-            posts.append(post_data)
-            count += 1
-
-            # Polite delay between post fetches
-            time.sleep(random.uniform(0.3, 0.8))
-
-        return {"profile": profile_data, "posts": posts, "success": True}
-
-    except instaloader.exceptions.ProfileNotExistsException:
-        return {"success": False, "error": f"Profile '{username}' does not exist."}
-    except instaloader.exceptions.LoginRequiredException:
-        return {"success": False, "error": "Instagram requires login. Set IG_USERNAME + IG_PASSWORD in Railway environment variables."}
-    except instaloader.exceptions.ConnectionException as e:
-        err = str(e)
-        if "403" in err:
-            return {"success": False, "error": "Instagram blocked the request (403). Set IG_USERNAME + IG_PASSWORD in Railway environment variables to fix this."}
-        if "401" in err:
-            return {"success": False, "error": "Instagram login expired. Update IG_PASSWORD or IG_SESSION_ID in Railway environment variables."}
-        return {"success": False, "error": f"Connection error: {err}"}
-    except Exception as e:
-        return {"success": False, "error": f"Unexpected error: {str(e)}"}
-
+# ── Save results ─────────────────────────────────────────────────────
 
 def save_scrape_results(result):
     """Save scraped data to the database."""
     if not result.get("success"):
         return False
-
     conn = get_db()
     try:
         profile_data = result["profile"]
-
-        # Update profile info
         conn.execute("""
             UPDATE profiles SET
-                full_name = ?,
-                follower_count = ?,
-                following_count = ?,
-                post_count = ?,
-                bio = ?,
-                profile_pic_url = ?,
-                is_verified = ?,
-                last_scraped = CURRENT_TIMESTAMP
+                full_name = ?, follower_count = ?, following_count = ?,
+                post_count = ?, bio = ?, profile_pic_url = ?,
+                is_verified = ?, last_scraped = CURRENT_TIMESTAMP
             WHERE username = ?
         """, (
-            profile_data["full_name"],
-            profile_data["follower_count"],
-            profile_data["following_count"],
-            profile_data["post_count"],
-            profile_data["bio"],
-            profile_data["profile_pic_url"],
+            profile_data["full_name"], profile_data["follower_count"],
+            profile_data["following_count"], profile_data["post_count"],
+            profile_data["bio"], profile_data["profile_pic_url"],
             1 if profile_data["is_verified"] else 0,
-            profile_data["username"]
+            profile_data["username"],
         ))
-
-        # Get profile ID
         row = conn.execute(
             "SELECT id FROM profiles WHERE username = ?",
-            (profile_data["username"],)
+            (profile_data["username"],),
         ).fetchone()
-
         if not row:
             return False
-
         profile_id = row["id"]
-
-        # Insert or update posts
         for post in result["posts"]:
             conn.execute("""
                 INSERT INTO posts (
@@ -333,35 +369,24 @@ def save_scrape_results(result):
                     engagement_rate = excluded.engagement_rate,
                     scraped_at = CURRENT_TIMESTAMP
             """, (
-                profile_id,
-                post["shortcode"],
-                post["post_url"],
-                post["caption"],
-                post["post_type"],
-                post["likes"],
-                post["comments"],
-                post["video_views"],
-                post["engagement_rate"],
-                post["posted_at"],
-                post["thumbnail_url"],
-                1 if post["is_video"] else 0,
+                profile_id, post["shortcode"], post["post_url"],
+                post["caption"], post["post_type"], post["likes"],
+                post["comments"], post["video_views"],
+                post["engagement_rate"], post["posted_at"],
+                post["thumbnail_url"], 1 if post["is_video"] else 0,
                 post["hashtags"],
             ))
-
-        # Log successful scrape
         conn.execute(
             "INSERT INTO scrape_log (profile_id, status, message) VALUES (?, 'success', ?)",
-            (profile_id, f"Scraped {len(result['posts'])} posts")
+            (profile_id, f"Scraped {len(result['posts'])} posts"),
         )
-
         conn.commit()
         return True
-
     except Exception as e:
         print(f"Error saving results: {e}")
         conn.execute(
             "INSERT INTO scrape_log (profile_id, status, message) VALUES (NULL, 'error', ?)",
-            (str(e),)
+            (str(e),),
         )
         conn.commit()
         return False
@@ -372,30 +397,26 @@ def save_scrape_results(result):
 def scrape_all_profiles(max_posts=30):
     """Scrape all monitored profiles."""
     conn = get_db()
-    profiles = conn.execute("SELECT username FROM profiles ORDER BY last_scraped ASC NULLS FIRST").fetchall()
+    profiles = conn.execute(
+        "SELECT username FROM profiles ORDER BY last_scraped ASC NULLS FIRST"
+    ).fetchall()
     conn.close()
-
     results = []
     for profile in profiles:
         username = profile["username"]
         print(f"Scraping @{username}...")
         result = scrape_profile(username, max_posts=max_posts)
-
         if result["success"]:
             save_scrape_results(result)
             results.append({"username": username, "status": "success", "posts": len(result["posts"])})
-            print(f"  ✓ Scraped {len(result['posts'])} posts")
+            print(f"  Scraped {len(result['posts'])} posts")
         else:
             results.append({"username": username, "status": "error", "error": result.get("error", "Unknown error")})
-            print(f"  ✗ Error: {result.get('error')}")
-
-        # Polite delay between profiles to avoid rate limiting
+            print(f"  Error: {result.get('error')}")
         time.sleep(random.uniform(2, 5))
-
     return results
 
 
 if __name__ == "__main__":
     init_db()
     print("Database initialized.")
-    print("Use 'from scraper import *' to access scraping functions.")
