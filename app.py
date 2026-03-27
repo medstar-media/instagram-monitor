@@ -369,24 +369,33 @@ def get_hooks():
 @app.route("/api/hashtag-leaderboard", methods=["GET"])
 def get_hashtag_leaderboard():
     """Rank hashtags by average engagement rate."""
+    import re as _re
     days = request.args.get("days", "90")
     min_uses = int(request.args.get("min_uses", 2))
 
     conn = get_db()
     posts = conn.execute("""
-        SELECT po.hashtags, po.engagement_rate, po.likes, po.comments
+        SELECT po.hashtags, po.caption, po.engagement_rate, po.likes, po.comments
         FROM posts po
-        WHERE po.hashtags IS NOT NULL AND po.hashtags != '[]'
+        WHERE po.caption IS NOT NULL AND po.caption != ''
           AND po.posted_at >= datetime('now', ?)
     """, (f"-{days} days",)).fetchall()
     conn.close()
 
-    # Aggregate hashtag stats
+    # Aggregate hashtag stats — extract from caption as primary source
     tag_stats = {}
     for post in posts:
+        # Try stored hashtags first, fall back to extracting from caption
+        tags = []
         try:
-            tags = json.loads(post["hashtags"])
+            stored = json.loads(post["hashtags"] or "[]")
+            if stored:
+                tags = stored
         except Exception:
+            pass
+        if not tags and post["caption"]:
+            tags = _re.findall(r"#(\w+)", post["caption"])
+        if not tags:
             continue
         for tag in tags:
             tag = tag.lower()

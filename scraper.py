@@ -378,6 +378,8 @@ def save_scrape_results(result):
                     comments = excluded.comments,
                     video_views = excluded.video_views,
                     engagement_rate = excluded.engagement_rate,
+                    caption = excluded.caption,
+                    hashtags = excluded.hashtags,
                     scraped_at = CURRENT_TIMESTAMP
             """, (
                 profile_id, post["shortcode"], post["post_url"],
