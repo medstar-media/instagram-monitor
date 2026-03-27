@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MedStar Instagram Monitor</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/luxon/3.4.4/luxon.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-adapter-luxon/1.3.1/chartjs-adapter-luxon.umd.min.js"></script>
     <style>
         :root {
             --bg-primary: #0f1117;
@@ -396,7 +394,7 @@
             <span class="nav-icon">🕐</span> <span>Best Times</span>
         </div>
         <div class="nav-item" onclick="showPage('growth')">
-            <span class="nav-icon">📈</span> <span>Growth</span>
+            <span class="nav-icon">📈</span> <span>Growth Tips</span>
         </div>
         <div class="nav-item" onclick="showPage('industry-tags')">
             <span class="nav-icon">🏷️</span> <span>Industry Tags</span>
@@ -681,33 +679,21 @@
         </div>
     </div>
 
-    <!-- ═══ GROWTH PAGE ═══ -->
+    <!-- ═══ GROWTH TIPS PAGE ═══ -->
     <div class="page-section" id="page-growth">
         <div class="page-header">
-            <h2>Follower Growth</h2>
+            <h2>Medstar Growth Tips</h2>
         </div>
         <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">
-            Track follower count changes over time for each monitored profile.
+            Data-driven growth recommendations based on your scraped performance metrics.
         </p>
         <div class="filters-bar">
-            <select id="growthDays" onchange="loadGrowth()">
-                <option value="30" selected>Last 30 Days</option>
-                <option value="90">Last 90 Days</option>
-                <option value="365">Last Year</option>
-                <option value="3650">All Time</option>
-            </select>
-            <select id="growthProfile" onchange="loadGrowth()">
+            <select id="growthProfile" onchange="loadGrowthPage()">
                 <option value="">All Profiles</option>
             </select>
         </div>
         <div class="panel">
-            <div class="panel-body">
-                <div id="growthChartWrapper" style="height:400px"><canvas id="chartGrowth"></canvas></div>
-            </div>
-        </div>
-
-        <div class="panel" style="margin-top:16px">
-            <div class="panel-header"><h3>📋 Growth Tips for @medstarmedia</h3></div>
+            <div class="panel-header"><h3>📋 Growth Tips</h3></div>
             <div class="panel-body" id="growthTipsPanel" style="font-size:13px;color:var(--text-secondary);line-height:1.7;">
                 <div id="growthTipsContent"></div>
             </div>
@@ -796,7 +782,7 @@ function showPage(page) {
     if (page === 'all-posts') loadAllPosts();
     if (page === 'hashtags') loadHashtags();
     if (page === 'timing') loadTimingHeatmap();
-    if (page === 'growth') loadGrowth();
+    if (page === 'growth') loadGrowthPage();
     if (page === 'industry-tags') loadIndustryTags();
 }
 
@@ -1306,112 +1292,46 @@ async function loadTimingHeatmap() {
     }
 }
 
-// ─── Load Growth Chart ───
-function destroyGrowthChart() {
-    // Destroy any existing chart on the growth canvas, regardless of variable state
-    const canvas = document.getElementById('chartGrowth');
-    if (canvas) {
-        const existing = Chart.getChart(canvas);
-        if (existing) existing.destroy();
-    }
-}
-
-function ensureGrowthCanvas() {
-    const wrapper = document.getElementById('growthChartWrapper');
-    if (!wrapper) return null;
-    let canvas = document.getElementById('chartGrowth');
-    if (!canvas) {
-        wrapper.innerHTML = '<canvas id="chartGrowth"></canvas>';
-        canvas = document.getElementById('chartGrowth');
-    }
-    return canvas;
-}
-
-async function loadGrowth() {
-    const days = document.getElementById('growthDays').value;
-    const profile = document.getElementById('growthProfile').value;
-    const params = new URLSearchParams({days});
-    if (profile) params.set('profile', profile);
-
-    const data = await api('/api/growth?' + params);
-    const wrapper = document.getElementById('growthChartWrapper');
-
-    if (!data || data.length === 0) {
-        destroyGrowthChart();
-        wrapper.innerHTML = '<div class="empty-state" style="height:400px;display:flex;align-items:center;justify-content:center"><p>No growth data yet. Data will appear after profiles are re-scraped over time.</p></div>';
-        loadGrowthTips(null);
-        return;
-    }
-
-    // Group by username
-    const byProfile = {};
-    data.forEach(s => {
-        if (!byProfile[s.username]) byProfile[s.username] = [];
-        byProfile[s.username].push({x: new Date(s.recorded_at), y: s.follower_count});
-    });
-
-    const colors = ['#6c5ce7', '#00cec9', '#fd79a8', '#fdcb6e', '#ff6b6b', '#a29bfe', '#55efc4', '#fab1a0'];
-    const datasets = Object.entries(byProfile).map(([username, points], i) => ({
-        label: '@' + username,
-        data: points,
-        borderColor: colors[i % colors.length],
-        backgroundColor: colors[i % colors.length] + '20',
-        fill: false,
-        tension: 0.3,
-        pointRadius: 3,
-    }));
-
-    try {
-        destroyGrowthChart();
-        const canvas = ensureGrowthCanvas();
-        wrapper.style.height = '400px';
-        new Chart(canvas, {
-            type: 'line',
-            data: {datasets},
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { labels: { color: '#8b8da3' } } },
-                scales: {
-                    x: {
-                        type: 'time',
-                        time: { unit: days <= 30 ? 'day' : 'week' },
-                        ticks: { color: '#8b8da3' },
-                        grid: { color: 'rgba(45,48,69,0.5)' }
-                    },
-                    y: {
-                        ticks: { color: '#8b8da3', callback: v => formatNumber(v) },
-                        grid: { color: 'rgba(45,48,69,0.5)' }
-                    }
+// ─── Medstar Growth Tips ───
+async function loadGrowthPage() {
+    // Populate profile dropdown
+    const select = document.getElementById('growthProfile');
+    if (select.options.length <= 1) {
+        const profiles = await api('/api/profiles');
+        if (profiles) {
+            profiles.forEach(p => {
+                if (!select.querySelector(`option[value="${p.username}"]`)) {
+                    const opt = document.createElement('option');
+                    opt.value = p.username;
+                    opt.textContent = '@' + p.username;
+                    select.appendChild(opt);
                 }
-            }
-        });
-    } catch(chartErr) {
-        console.error('Growth chart error:', chartErr);
-        wrapper.innerHTML = '<div class="empty-state" style="height:200px;display:flex;align-items:center;justify-content:center"><p>Chart rendering issue — tips are below.</p></div>';
+            });
+        }
     }
 
-    loadGrowthTips(byProfile);
-}
-
-// ─── Growth Tips ───
-async function loadGrowthTips(byProfile) {
     const el = document.getElementById('growthTipsContent');
     if (!el) return;
+    el.innerHTML = '<p style="color:var(--text-muted)">Loading tips...</p>';
 
-    const profile = document.getElementById('growthProfile').value || 'medstarmedia';
+    const profile = select.value || 'medstarmedia';
     const data = await api('/api/growth-tips?profile=' + encodeURIComponent(profile));
     if (!data || !data.tips || data.tips.length === 0) {
-        el.innerHTML = '<p style="color:var(--text-muted)">No tips available yet.</p>';
+        el.innerHTML = '<p style="color:var(--text-muted)">No tips available yet. Scrape some profiles first.</p>';
         return;
     }
+
+    // Update panel header with profile name
+    const header = document.querySelector('#page-growth .panel-header h3');
+    if (header) header.textContent = '📋 Growth Tips for @' + (data.profile || profile);
 
     let html = '';
     data.tips.forEach(tip => {
-        html += `<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
-            <span style="font-size:20px;flex-shrink:0">${tip.icon}</span>
+        html += `<div style="display:flex;gap:10px;padding:12px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:22px;flex-shrink:0">${tip.icon}</span>
             <div>
-                <strong style="color:var(--text-primary);font-size:13px">${tip.title}</strong>
-                <p style="margin:4px 0 0;font-size:12.5px;color:var(--text-secondary);line-height:1.6">${tip.text}</p>
+                <strong style="color:var(--text-primary);font-size:14px">${tip.title}</strong>
+                <p style="margin:4px 0 0;font-size:13px;color:var(--text-secondary);line-height:1.7">${tip.text}</p>
             </div>
         </div>`;
     });
