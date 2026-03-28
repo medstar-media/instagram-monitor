@@ -125,6 +125,14 @@ def init_db():
             description TEXT,
             added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS content_ideas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            question TEXT NOT NULL,
+            talking_points TEXT DEFAULT '',
+            status TEXT DEFAULT 'pending',
+            sort_order INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
         CREATE TABLE IF NOT EXISTS hook_ideas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             hook_text TEXT NOT NULL,
@@ -132,8 +140,11 @@ def init_db():
             source_post_url TEXT,
             source_username TEXT,
             source_engagement REAL DEFAULT 0,
+            hook_score INTEGER DEFAULT 0,
+            content_idea_id INTEGER,
             status TEXT DEFAULT 'pending',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (content_idea_id) REFERENCES content_ideas(id)
         );
         CREATE INDEX IF NOT EXISTS idx_snapshots_profile ON follower_snapshots(profile_id);
         CREATE INDEX IF NOT EXISTS idx_snapshots_date ON follower_snapshots(recorded_at);
@@ -144,7 +155,92 @@ def init_db():
 
     # Seed the hashtag library if empty
     _seed_hashtag_library(conn)
+    # Import content ideas from CSV if empty
+    _seed_content_ideas(conn)
     conn.close()
+
+
+def _seed_content_ideas(conn):
+    """Import content ideas and hooks from the CSV file if the table is empty."""
+    import csv as _csv
+    existing = conn.execute("SELECT COUNT(*) as c FROM content_ideas").fetchone()["c"]
+    if existing > 0:
+        return
+
+    csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "content_ideas.csv")
+    if not os.path.exists(csv_path):
+        return
+
+    with open(csv_path, "r", encoding="utf-8") as f:
+        reader = _csv.reader(f)
+        rows = list(reader)
+
+    imported = 0
+    for row in rows[1:]:  # skip header
+        if len(row) < 2 or not row[1].strip():
+            continue
+
+        status_raw = row[0].strip().lower()
+        question = row[1].strip()
+        hooks_raw = row[2].strip() if len(row) > 2 else ""
+        talking_raw = row[3].strip() if len(row) > 3 else ""
+
+        # Determine status
+        if status_raw == "done":
+            idea_status = "approved"
+        elif status_raw == "duplicate":
+            continue  # skip duplicates
+        else:
+            idea_status = "pending"
+
+        # Parse sort order from the number column
+        try:
+            sort_order = int(status_raw) if status_raw.isdigit() else 999
+        except ValueError:
+            sort_order = 999
+
+        # Insert content idea
+        cursor = conn.execute(
+            "INSERT INTO content_ideas (question, talking_points, status, sort_order) VALUES (?, ?, ?, ?)",
+            (question, talking_raw, idea_status, sort_order)
+        )
+        idea_id = cursor.lastrowid
+
+        # Parse and insert individual hooks
+        if hooks_raw:
+            parts = re.split(r'\n\s*\d+\.\s+', '\n' + hooks_raw)
+            hook_num = 0
+            for p in parts:
+                p = p.strip()
+                if p and len(p) > 10:
+                    hook_num += 1
+                    # Categorize
+                    pl = p.lower()
+                    if any(w in pl for w in ["how to", "here's how", "step", "guide", "tip"]):
+                        cat = "How-To / Educational"
+                    elif any(w in pl for w in ["?", "what if", "did you know", "why"]):
+                        cat = "Question / Curiosity"
+                    elif any(w in pl for w in ["most people", "nobody", "everyone", "stop", "don't"]):
+                        cat = "Contrarian / Bold"
+                    elif any(w in pl for w in ["result", "before", "after", "transform", "increase", "%"]):
+                        cat = "Results / Proof"
+                    elif any(w in pl for w in ["story", "when i", "i remember", "years ago"]):
+                        cat = "Storytelling"
+                    else:
+                        cat = "General"
+
+                    # Score based on position (first hooks tend to be strongest)
+                    score = max(90 - (hook_num - 1) * 10, 50)
+
+                    conn.execute("""
+                        INSERT INTO hook_ideas (hook_text, category, hook_score, content_idea_id, source_username, status)
+                        VALUES (?, ?, ?, ?, 'content-csv', 'pending')
+                    """, (p, cat, score, idea_id))
+
+        imported += 1
+
+    conn.commit()
+    print(f"Imported {imported} content ideas from CSV")
 
 
 def _seed_hashtag_library(conn):

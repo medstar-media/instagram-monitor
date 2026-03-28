@@ -721,62 +721,24 @@
     <div class="page-section" id="page-hook-ideas">
         <div class="page-header">
             <h2>Hook Ideas for Chris</h2>
-            <div style="display:flex;gap:8px;">
-                <button class="btn btn-primary" onclick="generateHookIdeas()">⚡ Generate from Posts</button>
-                <button class="btn" onclick="openAddHookModal()" style="background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);">+ Add Custom</button>
-            </div>
+            <button class="btn btn-primary" onclick="generateHookIdeas()">⚡ Generate from Scraped Posts</button>
         </div>
         <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">
-            Caption hooks pulled from top-performing posts. Hit ✅ to keep the ones you like, ✕ to toss them.
+            Content topics with hooks and talking points. Approve the ones you want to produce, decline to remove.
         </p>
         <div class="filters-bar">
-            <select id="hookStatusFilter" onchange="loadHookIdeas()">
-                <option value="">All Hooks</option>
-                <option value="pending">Pending Review</option>
-                <option value="liked" selected>Liked ✅</option>
-                <option value="dismissed">Dismissed</option>
+            <select id="hookViewMode" onchange="loadHookIdeas()">
+                <option value="content" selected>Content Ideas</option>
+                <option value="scraped">Scraped Hooks</option>
             </select>
-            <select id="hookCategoryFilter" onchange="loadHookIdeas()">
-                <option value="">All Categories</option>
-                <option value="How-To / Educational">How-To / Educational</option>
-                <option value="Question / Curiosity">Question / Curiosity</option>
-                <option value="Contrarian / Bold">Contrarian / Bold</option>
-                <option value="Results / Proof">Results / Proof</option>
-                <option value="Storytelling">Storytelling</option>
-                <option value="General">General</option>
-                <option value="Custom">Custom</option>
+            <select id="hookStatusFilter" onchange="loadHookIdeas()">
+                <option value="" selected>All</option>
+                <option value="pending">Pending Review</option>
+                <option value="approved">Approved ✅</option>
             </select>
             <span id="hookCount" style="color:var(--text-muted);font-size:13px;margin-left:8px;"></span>
         </div>
         <div id="hookIdeasContent"></div>
-    </div>
-
-    <!-- Add Hook Modal -->
-    <div class="modal-overlay" id="addHookModal">
-        <div class="modal">
-            <div class="modal-header">
-                <h3>Add Custom Hook</h3>
-                <button class="modal-close" onclick="closeAddHookModal()">×</button>
-            </div>
-            <div class="modal-body">
-                <label>Hook Text</label>
-                <textarea id="newHookText" placeholder="Write a hook idea..." style="width:100%;min-height:80px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);font-size:14px;resize:vertical;"></textarea>
-                <label style="margin-top:12px;display:block;">Category</label>
-                <select id="newHookCategory" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);">
-                    <option value="Custom">Custom</option>
-                    <option value="How-To / Educational">How-To / Educational</option>
-                    <option value="Question / Curiosity">Question / Curiosity</option>
-                    <option value="Contrarian / Bold">Contrarian / Bold</option>
-                    <option value="Results / Proof">Results / Proof</option>
-                    <option value="Storytelling">Storytelling</option>
-                    <option value="General">General</option>
-                </select>
-            </div>
-            <div class="modal-footer">
-                <button class="btn" onclick="closeAddHookModal()">Cancel</button>
-                <button class="btn btn-primary" onclick="addCustomHook()">Add Hook</button>
-            </div>
-        </div>
     </div>
 
     <!-- ═══ INDUSTRY HASHTAGS PAGE ═══ -->
@@ -1477,35 +1439,129 @@ function closeAddHookModal() { document.getElementById('addHookModal').classList
 async function loadHookIdeas() {
     const container = document.getElementById('hookIdeasContent');
     if (!container) return;
-    container.innerHTML = '<p style="color:var(--text-muted)">Loading hooks...</p>';
+    container.innerHTML = '<p style="color:var(--text-muted)">Loading...</p>';
 
+    const viewMode = document.getElementById('hookViewMode').value;
     const status = document.getElementById('hookStatusFilter').value;
-    const category = document.getElementById('hookCategoryFilter').value;
+
+    if (viewMode === 'content') {
+        await loadContentIdeas(container, status);
+    } else {
+        await loadScrapedHooks(container, status);
+    }
+}
+
+async function loadContentIdeas(container, status) {
+    let url = '/api/content-ideas';
+    if (status) url += '?status=' + encodeURIComponent(status);
+
+    const data = await api(url);
+    if (!data) { container.innerHTML = '<p style="color:var(--text-muted)">Error loading content ideas.</p>'; return; }
+
+    // Hide declined unless explicitly filtering for them
+    let filtered = data;
+    if (!status) filtered = data.filter(i => i.status !== 'declined');
+
+    document.getElementById('hookCount').textContent = filtered.length + ' topic' + (filtered.length !== 1 ? 's' : '');
+
+    if (filtered.length === 0) {
+        container.innerHTML = `<div class="empty-state" style="padding:40px;text-align:center;">
+            <div style="font-size:40px;margin-bottom:12px;">📝</div>
+            <p>No content ideas found${status ? ' with this filter' : ''}.</p>
+        </div>`;
+        return;
+    }
+
+    let html = '';
+    filtered.forEach(idea => {
+        const isApproved = idea.status === 'approved';
+        const borderColor = isApproved ? 'var(--green)' : 'var(--accent)';
+        const statusBadge = isApproved
+            ? '<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:rgba(0,184,148,0.15);color:var(--green);font-weight:600;">APPROVED</span>'
+            : '<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:rgba(108,92,231,0.15);color:var(--accent-light);">Pending</span>';
+
+        // Hooks list
+        let hooksHtml = '';
+        if (idea.hooks && idea.hooks.length > 0) {
+            idea.hooks.forEach((hook, idx) => {
+                const scoreColor = hook.hook_score >= 70 ? 'var(--green)' : hook.hook_score >= 40 ? 'var(--yellow, #fdcb6e)' : 'var(--text-muted)';
+                const scoreBar = `<div style="display:inline-flex;align-items:center;gap:6px;">
+                    <div style="width:50px;height:5px;border-radius:3px;background:var(--bg-hover);overflow:hidden;">
+                        <div style="width:${hook.hook_score}%;height:100%;background:${scoreColor};border-radius:3px;"></div>
+                    </div>
+                    <span style="font-size:10px;color:${scoreColor};font-weight:600;">${hook.hook_score}</span>
+                </div>`;
+                hooksHtml += `<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;${idx > 0 ? 'border-top:1px solid var(--border);' : ''}">
+                    <span style="font-size:12px;color:var(--text-muted);min-width:18px;">${idx + 1}.</span>
+                    <div style="flex:1;min-width:0;">
+                        <p style="font-size:13px;color:var(--text-primary);margin:0 0 3px;line-height:1.4;">${hook.hook_text}</p>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            ${scoreBar}
+                            ${hook.category ? `<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:var(--bg-hover);color:var(--text-muted);">${hook.category}</span>` : ''}
+                        </div>
+                    </div>
+                    <button onclick="copyHookText(\`${hook.hook_text.replace(/`/g,'\\`').replace(/\\/g,'\\\\')}\`)" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px;padding:4px;" title="Copy hook">📋</button>
+                </div>`;
+            });
+        }
+
+        // Talking points (expandable)
+        let talkingHtml = '';
+        if (idea.talking_points && idea.talking_points.trim()) {
+            const points = idea.talking_points.split('\n').filter(p => p.trim());
+            talkingHtml = `<div id="tp-${idea.id}" style="display:none;margin-top:8px;padding:10px 12px;background:var(--bg-hover);border-radius:8px;">
+                <p style="font-size:11px;font-weight:600;color:var(--text-secondary);margin:0 0 6px;text-transform:uppercase;letter-spacing:0.5px;">Talking Points</p>
+                ${points.map(p => `<p style="font-size:13px;color:var(--text-primary);margin:0 0 4px;line-height:1.5;">• ${p.replace(/^[-•]\s*/, '')}</p>`).join('')}
+            </div>`;
+        }
+
+        html += `<div class="panel" id="idea-${idea.id}" style="margin-bottom:10px;border-left:3px solid ${borderColor};transition:opacity 0.3s,transform 0.3s;">
+            <div class="panel-body" style="padding:14px 16px;">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;">
+                    <div style="flex:1;">
+                        <h4 style="font-size:15px;color:var(--text-primary);margin:0 0 6px;line-height:1.4;">${idea.question}</h4>
+                        <div style="display:flex;gap:6px;align-items:center;">
+                            ${statusBadge}
+                            <span style="font-size:11px;color:var(--text-muted);">${idea.hooks ? idea.hooks.length : 0} hooks</span>
+                            ${idea.talking_points ? `<button onclick="document.getElementById('tp-${idea.id}').style.display=document.getElementById('tp-${idea.id}').style.display==='none'?'block':'none'" style="background:none;border:none;color:var(--accent-light);cursor:pointer;font-size:11px;padding:0;">💡 Talking Points</button>` : ''}
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:6px;flex-shrink:0;">
+                        ${!isApproved ? `<button onclick="updateContentIdeaStatus(${idea.id}, 'approved')" style="background:none;border:1px solid var(--green);color:var(--green);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;" title="Approve this topic">✅ Approve</button>` : `<button onclick="updateContentIdeaStatus(${idea.id}, 'pending')" style="background:var(--green);border:none;color:#fff;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">APPROVED</button>`}
+                        <button onclick="updateContentIdeaStatus(${idea.id}, 'declined')" style="background:none;border:1px solid var(--red);color:var(--red);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;" title="Decline — removes from view">✕ Decline</button>
+                    </div>
+                </div>
+                <div style="padding:4px 0;">${hooksHtml}</div>
+                ${talkingHtml}
+            </div>
+        </div>`;
+    });
+    container.innerHTML = html;
+}
+
+async function loadScrapedHooks(container, status) {
     let url = '/api/hook-ideas';
     if (status) url += '?status=' + encodeURIComponent(status);
 
     const data = await api(url);
     if (!data) { container.innerHTML = '<p style="color:var(--text-muted)">Error loading hooks.</p>'; return; }
 
-    // Client-side category filter
-    let filtered = data;
-    if (category) filtered = data.filter(h => h.category === category);
+    document.getElementById('hookCount').textContent = data.length + ' hook' + (data.length !== 1 ? 's' : '');
 
-    document.getElementById('hookCount').textContent = filtered.length + ' hook' + (filtered.length !== 1 ? 's' : '');
-
-    if (filtered.length === 0) {
+    if (data.length === 0) {
         container.innerHTML = `<div class="empty-state" style="padding:40px;text-align:center;">
             <div style="font-size:40px;margin-bottom:12px;">🪝</div>
-            <p>No hooks found. Click <strong>⚡ Generate from Posts</strong> to pull hooks from your top-performing content.</p>
+            <p>No hooks found. Click <strong>⚡ Generate from Scraped Posts</strong> to pull hooks from your top-performing content.</p>
         </div>`;
         return;
     }
 
     let html = '';
-    filtered.forEach(hook => {
+    data.forEach(hook => {
         const statusClass = hook.status === 'liked' ? 'border-left:3px solid var(--green);' : hook.status === 'dismissed' ? 'border-left:3px solid var(--red);opacity:0.5;' : 'border-left:3px solid var(--accent);';
         const erPct = hook.source_engagement ? (hook.source_engagement * 100).toFixed(2) + '% ER' : '';
         const source = hook.source_username && hook.source_username !== 'manual' ? `@${hook.source_username}` : 'Custom';
+        const scoreColor = hook.hook_score >= 70 ? 'var(--green)' : hook.hook_score >= 40 ? 'var(--yellow, #fdcb6e)' : 'var(--text-muted)';
 
         html += `<div class="panel" id="hook-${hook.id}" style="margin-bottom:8px;${statusClass}">
             <div class="panel-body" style="display:flex;align-items:flex-start;gap:12px;padding:12px 16px;">
@@ -1515,6 +1571,7 @@ async function loadHookIdeas() {
                         <span style="font-size:11px;padding:2px 8px;border-radius:12px;background:var(--bg-hover);color:var(--accent-light);">${hook.category}</span>
                         <span style="font-size:11px;color:var(--text-muted);">${source}</span>
                         ${erPct ? `<span style="font-size:11px;color:var(--green);">${erPct}</span>` : ''}
+                        ${hook.hook_score ? `<span style="font-size:10px;color:${scoreColor};font-weight:600;">Score: ${hook.hook_score}</span>` : ''}
                         ${hook.source_post_url ? `<a href="${hook.source_post_url}" target="_blank" style="font-size:11px;color:var(--accent-light);text-decoration:none;">View source ↗</a>` : ''}
                     </div>
                 </div>
@@ -1529,8 +1586,37 @@ async function loadHookIdeas() {
     container.innerHTML = html;
 }
 
+async function updateContentIdeaStatus(id, status) {
+    const card = document.getElementById('idea-' + id);
+    if (card && status === 'declined') {
+        card.style.transition = 'opacity 0.4s, transform 0.4s, max-height 0.4s';
+        card.style.opacity = '0';
+        card.style.transform = 'translateX(-30px)';
+        card.style.maxHeight = card.offsetHeight + 'px';
+        card.style.overflow = 'hidden';
+        setTimeout(() => { card.style.maxHeight = '0'; card.style.padding = '0'; card.style.margin = '0'; }, 50);
+    }
+    const res = await fetch('/api/content-ideas/' + id, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status})
+    });
+    if (res.ok) {
+        if (status === 'declined') {
+            showToast('Topic declined and removed', 'success');
+            setTimeout(() => loadHookIdeas(), 500);
+        } else if (status === 'approved') {
+            showToast('Topic approved! ✅', 'success');
+            setTimeout(() => loadHookIdeas(), 350);
+        } else {
+            loadHookIdeas();
+        }
+    }
+}
+
 async function generateHookIdeas() {
     showToast('Generating hooks from top posts...', 'success');
+    document.getElementById('hookViewMode').value = 'scraped';
     const data = await api('/api/hook-ideas/generate', { method: 'POST', body: {} });
     if (data && data.generated > 0) {
         showToast(`Generated ${data.generated} new hook ideas!`, 'success');
@@ -1538,6 +1624,7 @@ async function generateHookIdeas() {
         loadHookIdeas();
     } else if (data && data.generated === 0) {
         showToast('No new hooks to generate — all top posts already covered.', 'success');
+        loadHookIdeas();
     } else {
         showToast('Error generating hooks', 'error');
     }
@@ -1550,7 +1637,6 @@ async function updateHookStatus(id, status) {
         body: JSON.stringify({status})
     });
     if (res.ok) {
-        // Animate the card briefly then reload
         const card = document.getElementById('hook-' + id);
         if (card) {
             card.style.transition = 'opacity 0.3s, transform 0.3s';
