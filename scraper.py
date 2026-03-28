@@ -125,9 +125,20 @@ def init_db():
             description TEXT,
             added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS hook_ideas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            hook_text TEXT NOT NULL,
+            category TEXT DEFAULT 'General',
+            source_post_url TEXT,
+            source_username TEXT,
+            source_engagement REAL DEFAULT 0,
+            status TEXT DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
         CREATE INDEX IF NOT EXISTS idx_snapshots_profile ON follower_snapshots(profile_id);
         CREATE INDEX IF NOT EXISTS idx_snapshots_date ON follower_snapshots(recorded_at);
         CREATE INDEX IF NOT EXISTS idx_hashtag_lib_cat ON hashtag_library(category);
+        CREATE INDEX IF NOT EXISTS idx_hook_ideas_status ON hook_ideas(status);
     """)
     conn.commit()
 

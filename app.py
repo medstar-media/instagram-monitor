@@ -592,6 +592,140 @@ def get_viral_posts():
     return jsonify([dict(p) for p in posts])
 
 
+@app.route("/api/hook-ideas", methods=["GET"])
+def get_hook_ideas():
+    """Get saved hook ideas filtered by status."""
+    status = request.args.get("status", "")  # pending, liked, dismissed, or empty for all
+    conn = get_db()
+    query = "SELECT * FROM hook_ideas"
+    params = []
+    if status:
+        query += " WHERE status = ?"
+        params.append(status)
+    query += " ORDER BY CASE status WHEN 'liked' THEN 0 WHEN 'pending' THEN 1 WHEN 'dismissed' THEN 2 END, created_at DESC"
+    ideas = conn.execute(query, params).fetchall()
+    conn.close()
+    return jsonify([dict(i) for i in ideas])
+
+
+@app.route("/api/hook-ideas/generate", methods=["POST"])
+def generate_hook_ideas():
+    """Generate hook ideas from top-performing posts across all monitored profiles."""
+    import re as _re
+    conn = get_db()
+
+    # Get top-performing posts with captions
+    posts = conn.execute("""
+        SELECT po.caption, po.engagement_rate, po.likes, po.comments,
+               po.post_url, po.post_type, pr.username, pr.follower_count
+        FROM posts po
+        JOIN profiles pr ON po.profile_id = pr.id
+        WHERE po.caption IS NOT NULL AND po.caption != ''
+        ORDER BY po.engagement_rate DESC
+        LIMIT 80
+    """).fetchall()
+
+    if not posts:
+        conn.close()
+        return jsonify({"generated": 0, "message": "No posts with captions found."})
+
+    # Get existing hooks to avoid duplicates
+    existing = set()
+    for row in conn.execute("SELECT hook_text FROM hook_ideas").fetchall():
+        existing.add(row["hook_text"].strip().lower())
+
+    generated = 0
+    for post in posts:
+        caption = post["caption"].strip()
+        if not caption:
+            continue
+
+        # Extract the opening hook (first line or first sentence)
+        lines = caption.split("\n")
+        hook = lines[0].strip()
+        if not hook or len(hook) < 10:
+            # Try joining first two lines
+            hook = " ".join(l.strip() for l in lines[:2] if l.strip())
+        if not hook or len(hook) < 10:
+            continue
+        if len(hook) > 200:
+            hook = hook[:200].rsplit(" ", 1)[0] + "..."
+
+        # Skip if already exists
+        if hook.lower() in existing:
+            continue
+
+        # Categorize the hook
+        hook_lower = hook.lower()
+        if any(w in hook_lower for w in ["how to", "here's how", "step", "guide", "tip"]):
+            category = "How-To / Educational"
+        elif any(w in hook_lower for w in ["?", "what if", "did you know", "why"]):
+            category = "Question / Curiosity"
+        elif any(w in hook_lower for w in ["most people", "nobody", "everyone", "stop", "don't"]):
+            category = "Contrarian / Bold"
+        elif any(w in hook_lower for w in ["result", "before", "after", "transform", "increase", "%"]):
+            category = "Results / Proof"
+        elif any(w in hook_lower for w in ["story", "when i", "i remember", "years ago", "journey"]):
+            category = "Storytelling"
+        else:
+            category = "General"
+
+        conn.execute("""
+            INSERT INTO hook_ideas (hook_text, category, source_post_url, source_username, source_engagement)
+            VALUES (?, ?, ?, ?, ?)
+        """, (hook, category, post["post_url"], post["username"], post["engagement_rate"]))
+        existing.add(hook.lower())
+        generated += 1
+
+    conn.commit()
+    conn.close()
+    return jsonify({"generated": generated, "message": f"Generated {generated} new hook ideas from top posts."})
+
+
+@app.route("/api/hook-ideas/<int:idea_id>", methods=["PATCH"])
+def update_hook_idea(idea_id):
+    """Update hook idea status: liked, dismissed, or pending."""
+    data = request.json
+    new_status = data.get("status", "pending")
+    if new_status not in ("liked", "dismissed", "pending"):
+        return jsonify({"error": "Invalid status"}), 400
+
+    conn = get_db()
+    conn.execute("UPDATE hook_ideas SET status = ? WHERE id = ?", (new_status, idea_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Updated", "id": idea_id, "status": new_status})
+
+
+@app.route("/api/hook-ideas/<int:idea_id>", methods=["DELETE"])
+def delete_hook_idea(idea_id):
+    """Permanently delete a hook idea."""
+    conn = get_db()
+    conn.execute("DELETE FROM hook_ideas WHERE id = ?", (idea_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Deleted", "id": idea_id})
+
+
+@app.route("/api/hook-ideas", methods=["POST"])
+def add_custom_hook():
+    """Add a custom hook idea manually."""
+    data = request.json
+    hook_text = (data.get("hook_text") or "").strip()
+    category = data.get("category", "Custom")
+    if not hook_text:
+        return jsonify({"error": "Hook text is required"}), 400
+
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO hook_ideas (hook_text, category, source_username) VALUES (?, ?, 'manual')",
+        (hook_text, category)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"message": f"Hook added: \"{hook_text[:50]}...\""})
+
+
 @app.route("/api/ad-recommendations", methods=["GET"])
 def get_ad_recommendations():
     """Recommend posts that Medstar Media should boost with paid ads.

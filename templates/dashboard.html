@@ -399,6 +399,9 @@
         <div class="nav-item" onclick="showPage('ad-recs')">
             <span class="nav-icon">💰</span> <span>Ad Picks</span>
         </div>
+        <div class="nav-item" onclick="showPage('hook-ideas')">
+            <span class="nav-icon">🪝</span> <span>Hook Ideas</span>
+        </div>
         <div class="nav-item" onclick="showPage('industry-tags')">
             <span class="nav-icon">🏷️</span> <span>Industry Tags</span>
         </div>
@@ -714,6 +717,68 @@
         <div id="adRecsContent"></div>
     </div>
 
+    <!-- ═══ HOOK IDEAS PAGE ═══ -->
+    <div class="page-section" id="page-hook-ideas">
+        <div class="page-header">
+            <h2>Hook Ideas for Chris</h2>
+            <div style="display:flex;gap:8px;">
+                <button class="btn btn-primary" onclick="generateHookIdeas()">⚡ Generate from Posts</button>
+                <button class="btn" onclick="openAddHookModal()" style="background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);">+ Add Custom</button>
+            </div>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">
+            Caption hooks pulled from top-performing posts. Hit ✅ to keep the ones you like, ✕ to toss them.
+        </p>
+        <div class="filters-bar">
+            <select id="hookStatusFilter" onchange="loadHookIdeas()">
+                <option value="">All Hooks</option>
+                <option value="pending">Pending Review</option>
+                <option value="liked" selected>Liked ✅</option>
+                <option value="dismissed">Dismissed</option>
+            </select>
+            <select id="hookCategoryFilter" onchange="loadHookIdeas()">
+                <option value="">All Categories</option>
+                <option value="How-To / Educational">How-To / Educational</option>
+                <option value="Question / Curiosity">Question / Curiosity</option>
+                <option value="Contrarian / Bold">Contrarian / Bold</option>
+                <option value="Results / Proof">Results / Proof</option>
+                <option value="Storytelling">Storytelling</option>
+                <option value="General">General</option>
+                <option value="Custom">Custom</option>
+            </select>
+            <span id="hookCount" style="color:var(--text-muted);font-size:13px;margin-left:8px;"></span>
+        </div>
+        <div id="hookIdeasContent"></div>
+    </div>
+
+    <!-- Add Hook Modal -->
+    <div class="modal-overlay" id="addHookModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Add Custom Hook</h3>
+                <button class="modal-close" onclick="closeAddHookModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <label>Hook Text</label>
+                <textarea id="newHookText" placeholder="Write a hook idea..." style="width:100%;min-height:80px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);font-size:14px;resize:vertical;"></textarea>
+                <label style="margin-top:12px;display:block;">Category</label>
+                <select id="newHookCategory" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);">
+                    <option value="Custom">Custom</option>
+                    <option value="How-To / Educational">How-To / Educational</option>
+                    <option value="Question / Curiosity">Question / Curiosity</option>
+                    <option value="Contrarian / Bold">Contrarian / Bold</option>
+                    <option value="Results / Proof">Results / Proof</option>
+                    <option value="Storytelling">Storytelling</option>
+                    <option value="General">General</option>
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeAddHookModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="addCustomHook()">Add Hook</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ═══ INDUSTRY HASHTAGS PAGE ═══ -->
     <div class="page-section" id="page-industry-tags">
         <div class="page-header">
@@ -784,7 +849,7 @@ function showPage(page) {
     document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.getElementById('page-' + page).classList.add('active');
-    const pages = ['overview','top-posts','hooks','profiles','all-posts','hashtags','timing','growth','ad-recs','industry-tags'];
+    const pages = ['overview','top-posts','hooks','profiles','all-posts','hashtags','timing','growth','ad-recs','hook-ideas','industry-tags'];
     const idx = pages.indexOf(page);
     if (idx >= 0) document.querySelectorAll('.nav-item')[idx].classList.add('active');
     currentPage = page;
@@ -798,6 +863,7 @@ function showPage(page) {
     if (page === 'timing') loadTimingHeatmap();
     if (page === 'growth') loadGrowthPage();
     if (page === 'ad-recs') loadAdRecs();
+    if (page === 'hook-ideas') loadHookIdeas();
     if (page === 'industry-tags') loadIndustryTags();
 }
 
@@ -1402,6 +1468,119 @@ async function loadAdRecs() {
     });
 
     container.innerHTML = html;
+}
+
+// ─── Hook Ideas ───
+function openAddHookModal() { document.getElementById('addHookModal').classList.add('show'); }
+function closeAddHookModal() { document.getElementById('addHookModal').classList.remove('show'); }
+
+async function loadHookIdeas() {
+    const container = document.getElementById('hookIdeasContent');
+    if (!container) return;
+    container.innerHTML = '<p style="color:var(--text-muted)">Loading hooks...</p>';
+
+    const status = document.getElementById('hookStatusFilter').value;
+    const category = document.getElementById('hookCategoryFilter').value;
+    let url = '/api/hook-ideas';
+    if (status) url += '?status=' + encodeURIComponent(status);
+
+    const data = await api(url);
+    if (!data) { container.innerHTML = '<p style="color:var(--text-muted)">Error loading hooks.</p>'; return; }
+
+    // Client-side category filter
+    let filtered = data;
+    if (category) filtered = data.filter(h => h.category === category);
+
+    document.getElementById('hookCount').textContent = filtered.length + ' hook' + (filtered.length !== 1 ? 's' : '');
+
+    if (filtered.length === 0) {
+        container.innerHTML = `<div class="empty-state" style="padding:40px;text-align:center;">
+            <div style="font-size:40px;margin-bottom:12px;">🪝</div>
+            <p>No hooks found. Click <strong>⚡ Generate from Posts</strong> to pull hooks from your top-performing content.</p>
+        </div>`;
+        return;
+    }
+
+    let html = '';
+    filtered.forEach(hook => {
+        const statusClass = hook.status === 'liked' ? 'border-left:3px solid var(--green);' : hook.status === 'dismissed' ? 'border-left:3px solid var(--red);opacity:0.5;' : 'border-left:3px solid var(--accent);';
+        const erPct = hook.source_engagement ? (hook.source_engagement * 100).toFixed(2) + '% ER' : '';
+        const source = hook.source_username && hook.source_username !== 'manual' ? `@${hook.source_username}` : 'Custom';
+
+        html += `<div class="panel" id="hook-${hook.id}" style="margin-bottom:8px;${statusClass}">
+            <div class="panel-body" style="display:flex;align-items:flex-start;gap:12px;padding:12px 16px;">
+                <div style="flex:1;min-width:0;">
+                    <p style="font-size:14px;color:var(--text-primary);margin:0 0 6px;line-height:1.5;">"${hook.hook_text}"</p>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                        <span style="font-size:11px;padding:2px 8px;border-radius:12px;background:var(--bg-hover);color:var(--accent-light);">${hook.category}</span>
+                        <span style="font-size:11px;color:var(--text-muted);">${source}</span>
+                        ${erPct ? `<span style="font-size:11px;color:var(--green);">${erPct}</span>` : ''}
+                        ${hook.source_post_url ? `<a href="${hook.source_post_url}" target="_blank" style="font-size:11px;color:var(--accent-light);text-decoration:none;">View source ↗</a>` : ''}
+                    </div>
+                </div>
+                <div style="display:flex;gap:6px;flex-shrink:0;">
+                    ${hook.status !== 'liked' ? `<button onclick="updateHookStatus(${hook.id}, 'liked')" style="background:none;border:1px solid var(--green);color:var(--green);padding:6px 10px;border-radius:8px;cursor:pointer;font-size:14px;" title="Keep this hook">✅</button>` : `<button onclick="updateHookStatus(${hook.id}, 'pending')" style="background:var(--green);border:none;color:#fff;padding:6px 10px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;" title="Liked!">KEPT</button>`}
+                    ${hook.status !== 'dismissed' ? `<button onclick="updateHookStatus(${hook.id}, 'dismissed')" style="background:none;border:1px solid var(--red);color:var(--red);padding:6px 10px;border-radius:8px;cursor:pointer;font-size:14px;" title="Dismiss this hook">✕</button>` : `<button onclick="updateHookStatus(${hook.id}, 'pending')" style="background:none;border:1px solid var(--text-muted);color:var(--text-muted);padding:6px 10px;border-radius:8px;cursor:pointer;font-size:11px;" title="Undo dismiss">Undo</button>`}
+                    <button onclick="copyHookText('${hook.hook_text.replace(/'/g, "\\'").replace(/"/g, "&quot;")}')" style="background:none;border:1px solid var(--border);color:var(--text-secondary);padding:6px 10px;border-radius:8px;cursor:pointer;font-size:14px;" title="Copy to clipboard">📋</button>
+                </div>
+            </div>
+        </div>`;
+    });
+    container.innerHTML = html;
+}
+
+async function generateHookIdeas() {
+    showToast('Generating hooks from top posts...', 'success');
+    const data = await api('/api/hook-ideas/generate', { method: 'POST', body: {} });
+    if (data && data.generated > 0) {
+        showToast(`Generated ${data.generated} new hook ideas!`, 'success');
+        document.getElementById('hookStatusFilter').value = 'pending';
+        loadHookIdeas();
+    } else if (data && data.generated === 0) {
+        showToast('No new hooks to generate — all top posts already covered.', 'success');
+    } else {
+        showToast('Error generating hooks', 'error');
+    }
+}
+
+async function updateHookStatus(id, status) {
+    const res = await fetch('/api/hook-ideas/' + id, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status})
+    });
+    if (res.ok) {
+        // Animate the card briefly then reload
+        const card = document.getElementById('hook-' + id);
+        if (card) {
+            card.style.transition = 'opacity 0.3s, transform 0.3s';
+            card.style.opacity = '0.3';
+            card.style.transform = 'translateX(' + (status === 'liked' ? '10px' : '-10px') + ')';
+        }
+        setTimeout(() => loadHookIdeas(), 350);
+    }
+}
+
+function copyHookText(text) {
+    navigator.clipboard.writeText(text.replace(/&quot;/g, '"')).then(() => {
+        showToast('Hook copied to clipboard!', 'success');
+    });
+}
+
+async function addCustomHook() {
+    const text = document.getElementById('newHookText').value.trim();
+    const category = document.getElementById('newHookCategory').value;
+    if (!text) return showToast('Enter some hook text', 'error');
+
+    const data = await api('/api/hook-ideas', { method: 'POST', body: { hook_text: text, category } });
+    if (data && !data.error) {
+        showToast('Hook added!', 'success');
+        closeAddHookModal();
+        document.getElementById('newHookText').value = '';
+        loadHookIdeas();
+    } else {
+        showToast('Error adding hook', 'error');
+    }
 }
 
 // ─── Industry Hashtags ───
