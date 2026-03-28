@@ -153,6 +153,14 @@ def init_db():
     """)
     conn.commit()
 
+    # ── Migrate existing hook_ideas table if needed ──
+    cols = [r["name"] for r in conn.execute("PRAGMA table_info(hook_ideas)").fetchall()]
+    if "hook_score" not in cols:
+        conn.execute("ALTER TABLE hook_ideas ADD COLUMN hook_score INTEGER DEFAULT 0")
+    if "content_idea_id" not in cols:
+        conn.execute("ALTER TABLE hook_ideas ADD COLUMN content_idea_id INTEGER")
+    conn.commit()
+
     # Seed the hashtag library if empty
     _seed_hashtag_library(conn)
     # Import content ideas from CSV if empty
