@@ -458,6 +458,9 @@
         <div class="nav-item" onclick="showPage('hook-ideas')">
             <span class="nav-icon">🪝</span> <span>Chris's Hook Ideas</span>
         </div>
+        <div class="nav-item" onclick="showPage('carousel-ideas')">
+            <span class="nav-icon">🎠</span> <span>Carousel Ideas</span>
+        </div>
         <div class="nav-item" onclick="showPage('industry-tags')">
             <span class="nav-icon">🏷️</span> <span>Industry Tags</span>
         </div>
@@ -808,6 +811,26 @@
         <div id="hookIdeasContent"></div>
     </div>
 
+    <!-- ═══ CAROUSEL IDEAS PAGE ═══ -->
+    <div class="page-section" id="page-carousel-ideas">
+        <div class="page-header">
+            <h2>Carousel Ideas</h2>
+            <button class="btn btn-secondary" onclick="copyAllCarouselIdeas()" style="font-size:12px;">📋 Copy All to Clipboard</button>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">
+            Concise slide-ready breakdowns from approved content topics. Hand these off to the graphics team.
+        </p>
+        <div class="filters-bar">
+            <select id="carouselStatusFilter" onchange="loadCarouselIdeas()">
+                <option value="approved" selected>Approved Topics</option>
+                <option value="">All Topics</option>
+                <option value="pending">Pending</option>
+            </select>
+            <span id="carouselCount" style="color:var(--text-muted);font-size:13px;margin-left:8px;"></span>
+        </div>
+        <div id="carouselIdeasContent"></div>
+    </div>
+
     <!-- ═══ INDUSTRY HASHTAGS PAGE ═══ -->
     <div class="page-section" id="page-industry-tags">
         <div class="page-header">
@@ -938,7 +961,7 @@ function showPage(page) {
     document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.getElementById('page-' + page).classList.add('active');
-    const pages = ['overview','top-posts','hooks','profiles','all-posts','hashtags','timing','growth','ad-recs','hook-ideas','industry-tags','team'];
+    const pages = ['overview','top-posts','hooks','profiles','all-posts','hashtags','timing','growth','ad-recs','hook-ideas','carousel-ideas','industry-tags','team'];
     const idx = pages.indexOf(page);
     if (idx >= 0) document.querySelectorAll('.nav-item')[idx].classList.add('active');
     currentPage = page;
@@ -953,6 +976,7 @@ function showPage(page) {
     if (page === 'growth') loadGrowthPage();
     if (page === 'ad-recs') loadAdRecs();
     if (page === 'hook-ideas') loadHookIdeas();
+    if (page === 'carousel-ideas') loadCarouselIdeas();
     if (page === 'industry-tags') loadIndustryTags();
     if (page === 'team') loadTeamPage();
 }
@@ -1592,11 +1616,13 @@ async function loadContentIdeas(container, status) {
     const data = await api(url);
     if (!data) { container.innerHTML = '<p style="color:var(--text-muted)">Error loading content ideas.</p>'; return; }
 
-    // Hide declined unless explicitly filtering for them
-    let filtered = data;
-    if (!status) filtered = data.filter(i => i.status !== 'declined');
+    // Sort: approved first, pending next, declined at bottom
+    let active = data.filter(i => i.status !== 'declined');
+    let declined = data.filter(i => i.status === 'declined');
+    let filtered = status === 'declined' ? declined : status ? data.filter(i => i.status === status) : [...active, ...declined];
 
-    document.getElementById('hookCount').textContent = filtered.length + ' topic' + (filtered.length !== 1 ? 's' : '');
+    const activeCount = active.length;
+    document.getElementById('hookCount').textContent = activeCount + ' active topic' + (activeCount !== 1 ? 's' : '') + (declined.length > 0 ? ` · ${declined.length} declined` : '');
 
     if (filtered.length === 0) {
         container.innerHTML = `<div class="empty-state" style="padding:40px;text-align:center;">
@@ -1607,8 +1633,25 @@ async function loadContentIdeas(container, status) {
     }
 
     let html = '';
+    let declinedHtml = '';
     filtered.forEach(idea => {
         const isApproved = idea.status === 'approved';
+        const isDeclined = idea.status === 'declined';
+
+        // ── Declined: render minimized at bottom ──
+        if (isDeclined) {
+            declinedHtml += `<div class="panel" id="idea-${idea.id}" style="margin-bottom:4px;border-left:3px solid var(--text-muted);opacity:0.45;">
+                <div class="panel-body" style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:11px;padding:2px 8px;border-radius:12px;background:rgba(255,107,107,0.1);color:var(--red);font-weight:600;">DECLINED</span>
+                        <span style="font-size:13px;color:var(--text-secondary);">${idea.question}</span>
+                    </div>
+                    <button onclick="updateContentIdeaStatus(${idea.id}, 'pending')" style="background:none;border:1px solid var(--accent);color:var(--accent-light);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;" title="Restore this topic">↩ Restore</button>
+                </div>
+            </div>`;
+            return;
+        }
+
         const borderColor = isApproved ? 'var(--green)' : 'var(--accent)';
         const statusBadge = isApproved
             ? '<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:rgba(0,184,148,0.15);color:var(--green);font-weight:600;">APPROVED</span>'
@@ -1662,7 +1705,7 @@ async function loadContentIdeas(container, status) {
                     </div>
                     <div style="display:flex;gap:6px;flex-shrink:0;">
                         ${!isApproved ? `<button onclick="updateContentIdeaStatus(${idea.id}, 'approved')" style="background:none;border:1px solid var(--green);color:var(--green);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;" title="Approve this topic">✅ Approve</button>` : `<button onclick="updateContentIdeaStatus(${idea.id}, 'pending')" style="background:var(--green);border:none;color:#fff;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">APPROVED</button>`}
-                        <button onclick="updateContentIdeaStatus(${idea.id}, 'declined')" style="background:none;border:1px solid var(--red);color:var(--red);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;" title="Decline — removes from view">✕ Decline</button>
+                        <button onclick="updateContentIdeaStatus(${idea.id}, 'declined')" style="background:none;border:1px solid var(--red);color:var(--red);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;" title="Decline — minimizes to bottom">✕ Decline</button>
                     </div>
                 </div>
                 <div style="padding:4px 0;">${hooksHtml}</div>
@@ -1670,6 +1713,14 @@ async function loadContentIdeas(container, status) {
             </div>
         </div>`;
     });
+
+    // Append declined section at bottom
+    if (declinedHtml) {
+        html += `<div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);">
+            <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Declined (${declined.length})</p>
+            ${declinedHtml}
+        </div>`;
+    }
     container.innerHTML = html;
 }
 
@@ -1722,13 +1773,9 @@ async function loadScrapedHooks(container, status) {
 
 async function updateContentIdeaStatus(id, status) {
     const card = document.getElementById('idea-' + id);
-    if (card && status === 'declined') {
-        card.style.transition = 'opacity 0.4s, transform 0.4s, max-height 0.4s';
-        card.style.opacity = '0';
-        card.style.transform = 'translateX(-30px)';
-        card.style.maxHeight = card.offsetHeight + 'px';
-        card.style.overflow = 'hidden';
-        setTimeout(() => { card.style.maxHeight = '0'; card.style.padding = '0'; card.style.margin = '0'; }, 50);
+    if (card) {
+        card.style.transition = 'opacity 0.3s';
+        card.style.opacity = '0.4';
     }
     const res = await fetch('/api/content-ideas/' + id, {
         method: 'PATCH',
@@ -1737,14 +1784,13 @@ async function updateContentIdeaStatus(id, status) {
     });
     if (res.ok) {
         if (status === 'declined') {
-            showToast('Topic declined and removed', 'success');
-            setTimeout(() => loadHookIdeas(), 500);
+            showToast('Topic declined — moved to bottom', 'success');
         } else if (status === 'approved') {
             showToast('Topic approved! ✅', 'success');
-            setTimeout(() => loadHookIdeas(), 350);
         } else {
-            loadHookIdeas();
+            showToast('Topic restored', 'success');
         }
+        loadHookIdeas();
     }
 }
 
@@ -1801,6 +1847,110 @@ async function addCustomHook() {
     } else {
         showToast('Error adding hook', 'error');
     }
+}
+
+// ─── Carousel Ideas ───
+async function loadCarouselIdeas() {
+    const container = document.getElementById('carouselIdeasContent');
+    const statusFilter = document.getElementById('carouselStatusFilter').value;
+    container.innerHTML = '<p style="color:var(--text-muted);padding:20px;">Loading carousel ideas...</p>';
+
+    let url = '/api/content-ideas';
+    if (statusFilter) url += '?status=' + encodeURIComponent(statusFilter);
+    const data = await api(url);
+    if (!data) { container.innerHTML = '<p style="color:var(--text-muted)">Error loading ideas.</p>'; return; }
+
+    document.getElementById('carouselCount').textContent = data.length + ' topic' + (data.length !== 1 ? 's' : '');
+
+    if (data.length === 0) {
+        container.innerHTML = `<div class="empty-state" style="padding:40px;text-align:center;">
+            <div style="font-size:40px;margin-bottom:12px;">🎠</div>
+            <p>No carousel ideas yet. Approve topics in <strong>Chris's Hook Ideas</strong> first, then they'll appear here as slide-ready breakdowns.</p>
+        </div>`;
+        return;
+    }
+
+    let html = '';
+    data.forEach(idea => {
+        const hooks = idea.hooks || [];
+        let slidesHtml = '';
+        hooks.forEach((hook, i) => {
+            // Condense hook text into a short slide headline (first sentence or up to 80 chars)
+            let headline = hook.hook_text || '';
+            if (headline.length > 80) {
+                const cut = headline.lastIndexOf(' ', 80);
+                headline = headline.substring(0, cut > 40 ? cut : 80) + '…';
+            }
+            slidesHtml += `<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 12px;background:var(--bg-primary);border-radius:8px;margin-bottom:4px;">
+                <span style="flex-shrink:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:700;">${i + 1}</span>
+                <span style="font-size:13px;color:var(--text-primary);line-height:1.4;">${headline}</span>
+            </div>`;
+        });
+
+        // Build talking points as brief CTA / caption notes
+        let captionHtml = '';
+        if (idea.talking_points) {
+            const points = idea.talking_points.split('\n').filter(p => p.trim());
+            const brief = points.slice(0, 3).map(p => p.replace(/^[-•]\s*/, '').trim()).join(' · ');
+            captionHtml = `<div style="margin-top:8px;padding:8px 12px;background:rgba(108,92,231,0.08);border-radius:8px;font-size:12px;color:var(--accent-light);">
+                <span style="font-weight:600;">Caption notes:</span> ${brief}
+            </div>`;
+        }
+
+        html += `<div class="panel" style="margin-bottom:12px;" id="carousel-${idea.id}">
+            <div class="panel-body" style="padding:16px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <div>
+                        <h4 style="font-size:15px;color:var(--text-primary);margin:0;">${idea.topic}</h4>
+                        <p style="font-size:12px;color:var(--text-muted);margin:2px 0 0;">${hooks.length} slides · ${idea.question || ''}</p>
+                    </div>
+                    <button onclick="copySingleCarousel(${idea.id})" style="background:none;border:1px solid var(--border);color:var(--text-secondary);padding:6px 10px;border-radius:8px;cursor:pointer;font-size:12px;" title="Copy this carousel">📋 Copy</button>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                    ${slidesHtml}
+                </div>
+                ${captionHtml}
+            </div>
+        </div>`;
+    });
+
+    container.innerHTML = html;
+}
+
+function copySingleCarousel(id) {
+    const card = document.getElementById('carousel-' + id);
+    if (!card) return;
+    const title = card.querySelector('h4').textContent;
+    const slides = card.querySelectorAll('[style*="border-radius:50%"]');
+    let text = '📌 ' + title + '\n\n';
+    const slideSpans = card.querySelectorAll('[style*="background:var(--bg-primary)"]');
+    slideSpans.forEach((el, i) => {
+        const txt = el.querySelectorAll('span')[1];
+        if (txt) text += 'Slide ' + (i + 1) + ': ' + txt.textContent.trim() + '\n';
+    });
+    navigator.clipboard.writeText(text.trim()).then(() => showToast('Carousel copied!', 'success'));
+}
+
+function copyAllCarouselIdeas() {
+    const cards = document.querySelectorAll('#carouselIdeasContent .panel');
+    if (cards.length === 0) return showToast('No carousel ideas to copy', 'error');
+
+    let allText = '';
+    cards.forEach((card, idx) => {
+        const title = card.querySelector('h4')?.textContent || 'Untitled';
+        allText += '━━━━━━━━━━━━━━━━━━━━\n';
+        allText += '📌 ' + title + '\n\n';
+        const slideEls = card.querySelectorAll('[style*="background:var(--bg-primary)"]');
+        slideEls.forEach((el, i) => {
+            const txt = el.querySelectorAll('span')[1];
+            if (txt) allText += 'Slide ' + (i + 1) + ': ' + txt.textContent.trim() + '\n';
+        });
+        const captionEl = card.querySelector('[style*="rgba(108,92,231"]');
+        if (captionEl) allText += '\nCaption: ' + captionEl.textContent.replace('Caption notes:', '').trim() + '\n';
+        allText += '\n';
+    });
+
+    navigator.clipboard.writeText(allText.trim()).then(() => showToast('All carousel ideas copied!', 'success'));
 }
 
 // ─── Industry Hashtags ───
