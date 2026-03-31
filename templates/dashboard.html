@@ -623,7 +623,7 @@
             <h2>Hooks & Caption Analysis</h2>
         </div>
         <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">
-            The opening lines of the highest-performing posts — use these as inspiration for your own content hooks.
+            The opening lines of the highest-performing posts. Use these as inspiration for your own content hooks.
         </p>
         <div class="filters-bar">
             <select id="hookDays" onchange="loadHooks()">
@@ -782,7 +782,7 @@
             <h2>Ad Recommendations</h2>
         </div>
         <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">
-            Posts scored by engagement, reach, content type, and recency — the best candidates for paid promotion.
+            Posts scored by engagement, reach, content type, and recency. The best candidates for paid promotion.
         </p>
         <div id="adRecsContent"></div>
     </div>
@@ -853,7 +853,7 @@
         <div id="industryTagsGrid"></div>
         <div style="margin-top:20px;padding:16px;background:var(--bg-card);border-radius:var(--radius);border:1px solid var(--border);">
             <h3 style="font-size:14px;margin-bottom:8px;color:var(--text-primary)">Quick Copy Sets</h3>
-            <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Click a set to copy all hashtags to clipboard — paste straight into your caption.</p>
+            <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Click a set to copy all hashtags to clipboard. Paste straight into your caption.</p>
             <div style="display:flex;flex-wrap:wrap;gap:8px" id="quickCopySets"></div>
         </div>
     </div>
@@ -1465,8 +1465,8 @@ async function loadTimingHeatmap() {
                 ? `rgba(108, 92, 231, ${intensity})`
                 : 'rgba(45, 48, 69, 0.3)';
             const tooltip = cell.count > 0
-                ? `${dayNames[dow]} ${hour}:00 — ${cell.count} posts, ${cell.avg_engagement.toFixed(2)}% avg eng`
-                : `${dayNames[dow]} ${hour}:00 — no posts`;
+                ? `${dayNames[dow]} ${hour}:00 - ${cell.count} posts, ${cell.avg_engagement.toFixed(2)}% avg eng`
+                : `${dayNames[dow]} ${hour}:00 - no posts`;
             html += `<div class="heatmap-cell" style="background:${bg}" title="${tooltip}">${cell.count > 0 ? cell.count : ''}</div>`;
         }
     }
@@ -1705,7 +1705,7 @@ async function loadContentIdeas(container, status) {
                     </div>
                     <div style="display:flex;gap:6px;flex-shrink:0;">
                         ${!isApproved ? `<button onclick="updateContentIdeaStatus(${idea.id}, 'approved')" style="background:none;border:1px solid var(--green);color:var(--green);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;" title="Approve this topic">✅ Approve</button>` : `<button onclick="updateContentIdeaStatus(${idea.id}, 'pending')" style="background:var(--green);border:none;color:#fff;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">APPROVED</button>`}
-                        <button onclick="updateContentIdeaStatus(${idea.id}, 'declined')" style="background:none;border:1px solid var(--red);color:var(--red);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;" title="Decline — minimizes to bottom">✕ Decline</button>
+                        <button onclick="updateContentIdeaStatus(${idea.id}, 'declined')" style="background:none;border:1px solid var(--red);color:var(--red);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;" title="Decline - minimizes to bottom">✕ Decline</button>
                     </div>
                 </div>
                 <div style="padding:4px 0;">${hooksHtml}</div>
@@ -1784,7 +1784,7 @@ async function updateContentIdeaStatus(id, status) {
     });
     if (res.ok) {
         if (status === 'declined') {
-            showToast('Topic declined — moved to bottom', 'success');
+            showToast('Topic declined, moved to bottom', 'success');
         } else if (status === 'approved') {
             showToast('Topic approved! ✅', 'success');
         } else {
@@ -1803,7 +1803,7 @@ async function generateHookIdeas() {
         document.getElementById('hookStatusFilter').value = 'pending';
         loadHookIdeas();
     } else if (data && data.generated === 0) {
-        showToast('No new hooks to generate — all top posts already covered.', 'success');
+        showToast('No new hooks to generate. All top posts already covered.', 'success');
         loadHookIdeas();
     } else {
         showToast('Error generating hooks', 'error');
@@ -1938,7 +1938,7 @@ function copyAllCarouselIdeas() {
     let allText = '';
     cards.forEach((card, idx) => {
         const title = card.querySelector('h4')?.textContent || 'Untitled';
-        allText += '━━━━━━━━━━━━━━━━━━━━\n';
+        allText += '--------------------\n';
         allText += '📌 ' + title + '\n\n';
         const slideEls = card.querySelectorAll('[style*="background:var(--bg-primary)"]');
         slideEls.forEach((el, i) => {

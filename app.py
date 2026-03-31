@@ -1205,19 +1205,19 @@ def get_ad_recommendations():
         if er > avg_er * 1.5:
             reasons.append(f"Engagement rate ({round(er * 100, 2)}%) is {round(er / avg_er, 1)}x above your average")
         if likes > avg_likes * 1.5:
-            reasons.append(f"{likes} likes — strong social proof")
+            reasons.append(f"{likes} likes, strong social proof")
         if comments > avg_comments * 2:
-            reasons.append(f"{comments} comments — high conversation potential")
+            reasons.append(f"{comments} comments, high conversation potential")
         if saves > 0:
-            reasons.append(f"{saves} saves — audience wants to revisit this")
+            reasons.append(f"{saves} saves, audience wants to revisit this")
         if views > 5000:
-            reasons.append(f"{formatNumber_py(views)} views — proven reach")
+            reasons.append(f"{formatNumber_py(views)} views, proven reach")
         if post_type == "video":
-            reasons.append("Video/Reel — best ad format for reach")
+            reasons.append("Video/Reel, best ad format for reach")
         elif post_type == "carousel":
-            reasons.append("Carousel — great for retargeting & education")
+            reasons.append("Carousel, great for retargeting & education")
         if recency_score > 0.7:
-            reasons.append("Recent post — timely & relevant")
+            reasons.append("Recent post, timely & relevant")
         if not reasons:
             reasons.append("Solid overall metrics for paid promotion")
 
@@ -1346,7 +1346,7 @@ def get_growth_tips():
         "title": "Engagement Overview",
         "text": f"@{profile_filter} averages {round(avg_er * 100, 2)}% engagement across {total_posts} posts ({round(avg_likes)} likes, {round(avg_comments)} comments per post). "
                 + ("Great engagement rate! Keep it up." if avg_er >= 0.03 else
-                   "Solid engagement — aim for 3%+ to stand out." if avg_er >= 0.015 else
+                   "Solid engagement. Aim for 3%+ to stand out." if avg_er >= 0.015 else
                    "Engagement is below 1.5%. Focus on hooks, CTAs, and Reels to boost interaction.")
     })
 
@@ -1356,7 +1356,7 @@ def get_growth_tips():
         tips.append({
             "icon": "🎬",
             "title": f"Double Down on {type_label}",
-            "text": f"{type_label} posts average {best_type_er}% engagement — your strongest format. "
+            "text": f"{type_label} posts average {best_type_er}% engagement, your strongest format. "
                     + ("Consider increasing Reels output to 4-5 per week for maximum reach." if "reel" in best_type.lower() or "video" in best_type.lower()
                        else f"Mix more {type_label} content into your calendar for consistent performance.")
         })
@@ -1379,7 +1379,7 @@ def get_growth_tips():
         tips.append({
             "icon": "💬",
             "title": f"Likes-to-Comments Ratio: {lc_ratio}:1",
-            "text": ("Your audience is highly engaged in conversation — that's a strong community signal!" if lc_ratio < 15 else
+            "text": ("Your audience is highly engaged in conversation. That's a strong community signal!" if lc_ratio < 15 else
                      "Solid ratio. Add more CTAs like 'Drop a 🔥 if you agree' or ask questions to boost comment rates." if lc_ratio < 30 else
                      "High like-to-comment ratio suggests passive engagement. Use carousel posts with questions, polls in Stories, and strong CTAs to spark more comments.")
         })
@@ -1426,7 +1426,7 @@ def get_growth_tips():
         tips.append({
             "icon": direction,
             "title": f"Follower Trend: {'+' if diff >= 0 else ''}{diff} ({pct}%)",
-            "text": ("Growth is trending up — keep your current strategy and scale what works." if diff > 0 else
+            "text": ("Growth is trending up. Keep your current strategy and scale what works." if diff > 0 else
                      "Followers are declining. Audit recent content, increase Reels output, engage with comments within the first hour, and collaborate with peers in the medspa niche." if diff < 0 else
                      "Follower count is stable. To accelerate growth, try collaborations, giveaways, or trending audio Reels.")
         })
