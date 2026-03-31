@@ -146,10 +146,23 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (content_idea_id) REFERENCES content_ideas(id)
         );
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            display_name TEXT NOT NULL,
+            password_hash TEXT NOT NULL,
+            is_admin INTEGER DEFAULT 0,
+            is_active INTEGER DEFAULT 1,
+            twofa_code TEXT,
+            twofa_expires TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_login TIMESTAMP
+        );
         CREATE INDEX IF NOT EXISTS idx_snapshots_profile ON follower_snapshots(profile_id);
         CREATE INDEX IF NOT EXISTS idx_snapshots_date ON follower_snapshots(recorded_at);
         CREATE INDEX IF NOT EXISTS idx_hashtag_lib_cat ON hashtag_library(category);
         CREATE INDEX IF NOT EXISTS idx_hook_ideas_status ON hook_ideas(status);
+        CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
     """)
     conn.commit()
 

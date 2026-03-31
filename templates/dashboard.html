@@ -461,10 +461,16 @@
         <div class="nav-item" onclick="showPage('industry-tags')">
             <span class="nav-icon">🏷️</span> <span>Industry Tags</span>
         </div>
+        <div class="nav-item" onclick="showPage('team')">
+            <span class="nav-icon">👤</span> <span>Team</span>
+        </div>
     </div>
     <div style="padding:12px;border-top:1px solid var(--border);">
-        <a href="/bookmarklet" style="display:flex;align-items:center;gap:8px;padding:10px 12px;color:var(--accent-light);text-decoration:none;font-size:13px;border-radius:8px;background:var(--bg-card);transition:background 0.2s;" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='var(--bg-card)'">
+        <a href="/bookmarklet" style="display:flex;align-items:center;gap:8px;padding:10px 12px;color:var(--accent-light);text-decoration:none;font-size:13px;border-radius:8px;background:var(--bg-card);transition:background 0.2s;margin-bottom:8px;" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='var(--bg-card)'">
             <span>🔖</span> <span>Get Scraper Tool</span>
+        </a>
+        <a href="/auth/logout" style="display:flex;align-items:center;gap:8px;padding:10px 12px;color:var(--red);text-decoration:none;font-size:13px;border-radius:8px;transition:background 0.2s;" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='transparent'">
+            <span>🚪</span> <span>Sign Out</span>
         </a>
     </div>
 </nav>
@@ -823,6 +829,53 @@
             <div style="display:flex;flex-wrap:wrap;gap:8px" id="quickCopySets"></div>
         </div>
     </div>
+
+    <!-- ═══ TEAM PAGE ═══ -->
+    <div class="page-section" id="page-team">
+        <div class="page-header">
+            <h2>Team Management</h2>
+            <button class="btn btn-primary" onclick="openInviteModal()">+ Invite User</button>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">
+            Manage who has access to the dashboard. Only admins can invite or remove users.
+        </p>
+        <div id="teamContent"></div>
+    </div>
+
+</div><!-- end .main -->
+
+<!-- Invite User Modal -->
+<div class="modal-overlay" id="inviteModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Invite New User</h3>
+            <button class="modal-close" onclick="closeInviteModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Display Name</label>
+                <input type="text" id="inviteName" placeholder="Chris">
+            </div>
+            <div class="form-group">
+                <label>Email Address</label>
+                <input type="text" id="inviteEmail" placeholder="chris@medstarmedia.com">
+            </div>
+            <div class="form-group">
+                <label>Temporary Password</label>
+                <input type="text" id="invitePassword" placeholder="Min 6 characters">
+            </div>
+            <div class="form-group">
+                <label style="display:flex;align-items:center;gap:8px;">
+                    <input type="checkbox" id="inviteAdmin" style="width:auto;">
+                    Admin privileges
+                </label>
+            </div>
+            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeInviteModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="inviteUser()">Create Account</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Add Industry Hashtag Modal -->
@@ -880,7 +933,7 @@ function showPage(page) {
     document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.getElementById('page-' + page).classList.add('active');
-    const pages = ['overview','top-posts','hooks','profiles','all-posts','hashtags','timing','growth','ad-recs','hook-ideas','industry-tags'];
+    const pages = ['overview','top-posts','hooks','profiles','all-posts','hashtags','timing','growth','ad-recs','hook-ideas','industry-tags','team'];
     const idx = pages.indexOf(page);
     if (idx >= 0) document.querySelectorAll('.nav-item')[idx].classList.add('active');
     currentPage = page;
@@ -896,6 +949,7 @@ function showPage(page) {
     if (page === 'ad-recs') loadAdRecs();
     if (page === 'hook-ideas') loadHookIdeas();
     if (page === 'industry-tags') loadIndustryTags();
+    if (page === 'team') loadTeamPage();
 }
 
 // ─── Toast notifications ───
@@ -1839,6 +1893,101 @@ async function addIndustryHashtag() {
         loadIndustryTags();
     } else {
         showToast(result?.error || 'Failed', 'error');
+    }
+}
+
+// ─── Team Management ───
+function openInviteModal() { document.getElementById('inviteModal').classList.add('show'); }
+function closeInviteModal() { document.getElementById('inviteModal').classList.remove('show'); }
+
+async function loadTeamPage() {
+    const container = document.getElementById('teamContent');
+    if (!container) return;
+    container.innerHTML = '<p style="color:var(--text-muted)">Loading team...</p>';
+
+    const data = await api('/api/users');
+    if (!data) { container.innerHTML = '<p style="color:var(--text-muted)">Error loading users.</p>'; return; }
+
+    let html = '';
+    data.forEach(user => {
+        const isActive = user.is_active;
+        const adminBadge = user.is_admin ? '<span style="font-size:10px;padding:2px 8px;border-radius:12px;background:rgba(108,92,231,0.15);color:var(--accent-light);font-weight:600;">ADMIN</span>' : '';
+        const statusBadge = isActive
+            ? '<span style="font-size:10px;padding:2px 8px;border-radius:12px;background:rgba(0,206,201,0.15);color:var(--green);">Active</span>'
+            : '<span style="font-size:10px;padding:2px 8px;border-radius:12px;background:rgba(255,107,107,0.15);color:var(--red);">Deactivated</span>';
+        const lastLogin = user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never';
+
+        html += `<div class="panel" style="margin-bottom:8px;${!isActive ? 'opacity:0.5;' : ''}">
+            <div class="panel-body" style="display:flex;align-items:center;gap:16px;padding:14px 16px;">
+                <div style="width:40px;height:40px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:white;flex-shrink:0;">
+                    ${user.display_name.charAt(0).toUpperCase()}
+                </div>
+                <div style="flex:1;min-width:0;">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+                        <span style="font-size:14px;font-weight:600;color:var(--text-primary);">${user.display_name}</span>
+                        ${adminBadge} ${statusBadge}
+                    </div>
+                    <div style="font-size:12px;color:var(--text-muted);">${user.email} · Last login: ${lastLogin}</div>
+                </div>
+                <div style="display:flex;gap:6px;flex-shrink:0;">
+                    <button onclick="resetUserPassword(${user.id}, '${user.display_name}')" class="btn btn-secondary btn-sm" title="Reset password">🔑</button>
+                    ${isActive ? `<button onclick="deactivateUser(${user.id}, '${user.display_name}')" class="btn btn-secondary btn-sm" style="color:var(--red);" title="Deactivate user">✕</button>` : ''}
+                </div>
+            </div>
+        </div>`;
+    });
+    container.innerHTML = html;
+}
+
+async function inviteUser() {
+    const name = document.getElementById('inviteName').value.trim();
+    const email = document.getElementById('inviteEmail').value.trim();
+    const password = document.getElementById('invitePassword').value;
+    const isAdmin = document.getElementById('inviteAdmin').checked;
+
+    if (!name || !email || !password) return showToast('All fields are required', 'error');
+    if (password.length < 6) return showToast('Password must be at least 6 characters', 'error');
+
+    const data = await api('/api/users', {
+        method: 'POST',
+        body: { display_name: name, email, password, is_admin: isAdmin }
+    });
+    if (data && !data.error) {
+        showToast(`Account created for ${email}!`, 'success');
+        closeInviteModal();
+        document.getElementById('inviteName').value = '';
+        document.getElementById('inviteEmail').value = '';
+        document.getElementById('invitePassword').value = '';
+        document.getElementById('inviteAdmin').checked = false;
+        loadTeamPage();
+    } else {
+        showToast(data?.error || 'Error creating user', 'error');
+    }
+}
+
+async function deactivateUser(id, name) {
+    if (!confirm(`Deactivate ${name}? They won't be able to sign in.`)) return;
+    const res = await fetch('/api/users/' + id, { method: 'DELETE' });
+    if (res.ok) {
+        showToast(`${name} deactivated`, 'success');
+        loadTeamPage();
+    } else {
+        showToast('Error deactivating user', 'error');
+    }
+}
+
+async function resetUserPassword(id, name) {
+    const newPass = prompt(`Enter new password for ${name} (min 6 chars):`);
+    if (!newPass || newPass.length < 6) return showToast('Password must be at least 6 characters', 'error');
+    const res = await fetch('/api/users/' + id + '/reset-password', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ password: newPass })
+    });
+    if (res.ok) {
+        showToast(`Password reset for ${name}`, 'success');
+    } else {
+        showToast('Error resetting password', 'error');
     }
 }
 

@@ -5,13 +5,136 @@ A web-based dashboard for monitoring Instagram influencer post performance.
 
 import os
 import json
+import random
+import smtplib
 import threading
-from datetime import datetime
-from flask import Flask, render_template, request, jsonify, redirect, url_for, make_response
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime, timedelta
+from functools import wraps
+from flask import Flask, render_template, request, jsonify, redirect, url_for, make_response, session
+from werkzeug.security import generate_password_hash, check_password_hash
 from scraper import init_db, get_db, add_profile, remove_profile, scrape_profile, save_scrape_results, scrape_all_profiles
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "medstar-default-secret-change-me-in-production")
+app.permanent_session_lifetime = timedelta(days=7)
+
+# ─── Email config (set these env vars on Railway) ───
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASS = os.environ.get("SMTP_PASS", "")
+SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER)
+
+
+# ─── Auth helpers ───────────────────────────────────────────────
+
+def login_required(f):
+    """Decorator to protect routes — redirects to login if not authenticated."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("user_id"):
+            if request.is_json or request.path.startswith("/api/"):
+                return jsonify({"error": "Authentication required"}), 401
+            return redirect("/auth/login")
+        return f(*args, **kwargs)
+    return decorated
+
+
+def admin_required(f):
+    """Decorator to protect admin-only routes."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("user_id"):
+            return redirect("/auth/login")
+        if not session.get("is_admin"):
+            return jsonify({"error": "Admin access required"}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+
+def generate_2fa_code():
+    """Generate a 6-digit numeric code."""
+    return f"{random.randint(0, 999999):06d}"
+
+
+def send_2fa_email(to_email, code, display_name):
+    """Send a 2FA verification code via email."""
+    if not SMTP_USER or not SMTP_PASS:
+        print(f"[2FA] SMTP not configured — code for {to_email}: {code}")
+        return True  # Allow login in dev mode without email
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"Your Medstar Media verification code: {code}"
+    msg["From"] = SMTP_FROM
+    msg["To"] = to_email
+
+    html = f"""
+    <div style="font-family:-apple-system,sans-serif;max-width:480px;margin:0 auto;padding:40px 20px;">
+        <h2 style="color:#6c5ce7;margin-bottom:8px;">Medstar Media Social</h2>
+        <p style="color:#555;font-size:15px;">Hi {display_name},</p>
+        <p style="color:#555;font-size:15px;">Your verification code is:</p>
+        <div style="background:#f8f9fa;border-radius:12px;padding:24px;text-align:center;margin:24px 0;">
+            <span style="font-size:36px;font-weight:700;letter-spacing:8px;color:#333;">{code}</span>
+        </div>
+        <p style="color:#888;font-size:13px;">This code expires in 10 minutes. If you didn't request this, you can safely ignore this email.</p>
+    </div>
+    """
+    msg.attach(MIMEText(html, "html"))
+
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASS)
+            server.send_message(msg)
+        return True
+    except Exception as e:
+        print(f"[2FA] Email send error: {e}")
+        return False
+
+
+def mask_email(email):
+    """Mask email for display: f***y@medstarmedia.com"""
+    parts = email.split("@")
+    name = parts[0]
+    if len(name) <= 2:
+        masked = name[0] + "***"
+    else:
+        masked = name[0] + "***" + name[-1]
+    return f"{masked}@{parts[1]}"
+
+
+def ensure_default_admin():
+    """Create a default admin account if no users exist."""
+    conn = get_db()
+    count = conn.execute("SELECT COUNT(*) as c FROM users").fetchone()["c"]
+    if count == 0:
+        default_email = os.environ.get("ADMIN_EMAIL", "admin@medstarmedia.com")
+        default_pass = os.environ.get("ADMIN_PASSWORD", "medstar2024!")
+        conn.execute(
+            "INSERT INTO users (email, display_name, password_hash, is_admin) VALUES (?, ?, ?, 1)",
+            (default_email, "Admin", generate_password_hash(default_pass))
+        )
+        conn.commit()
+        print(f"[Auth] Default admin created: {default_email}")
+    conn.close()
+
+
+@app.before_request
+def require_login():
+    """Protect all routes except auth endpoints and browser-scrape."""
+    allowed_prefixes = ("/auth/", "/static/", "/api/browser-scrape")
+    if any(request.path.startswith(p) for p in allowed_prefixes):
+        return None
+    if request.path == "/bookmarklet":
+        return None  # Bookmarklet page needs to be accessible
+    if request.method == "OPTIONS":
+        return None  # CORS preflight
+    if not session.get("user_id"):
+        if request.is_json or request.path.startswith("/api/"):
+            return jsonify({"error": "Authentication required"}), 401
+        return redirect("/auth/login")
 
 
 @app.after_request
@@ -26,9 +149,200 @@ def add_cors_headers(response):
 
 # Initialize database on startup
 init_db()
+ensure_default_admin()
 
 # Track background scraping status
 scrape_status = {"running": False, "message": "", "progress": 0, "total": 0}
+
+
+# ─── AUTH ROUTES ────────────────────────────────────────────────
+
+
+@app.route("/auth/login", methods=["GET", "POST"])
+def auth_login():
+    """Step 1: Email + Password login."""
+    if session.get("user_id"):
+        return redirect("/")
+
+    if request.method == "GET":
+        return render_template("login.html", step="login")
+
+    email = request.form.get("email", "").strip().lower()
+    password = request.form.get("password", "")
+
+    conn = get_db()
+    user = conn.execute("SELECT * FROM users WHERE email = ? AND is_active = 1", (email,)).fetchone()
+    conn.close()
+
+    if not user or not check_password_hash(user["password_hash"], password):
+        return render_template("login.html", step="login", error="Invalid email or password.", email=email)
+
+    # Generate and send 2FA code
+    code = generate_2fa_code()
+    expires = datetime.now() + timedelta(minutes=10)
+    conn = get_db()
+    conn.execute("UPDATE users SET twofa_code = ?, twofa_expires = ? WHERE id = ?",
+                 (generate_password_hash(code), expires.isoformat(), user["id"]))
+    conn.commit()
+    conn.close()
+
+    send_2fa_email(email, code, user["display_name"])
+
+    return render_template("login.html", step="twofa",
+                           user_id=user["id"], masked_email=mask_email(email))
+
+
+@app.route("/auth/verify-2fa", methods=["POST"])
+def auth_verify_2fa():
+    """Step 2: Verify 2FA code."""
+    user_id = request.form.get("user_id", type=int)
+    code = request.form.get("code", "").strip()
+
+    if not user_id or not code:
+        return redirect("/auth/login")
+
+    conn = get_db()
+    user = conn.execute("SELECT * FROM users WHERE id = ? AND is_active = 1", (user_id,)).fetchone()
+
+    if not user:
+        conn.close()
+        return redirect("/auth/login")
+
+    # Check expiry
+    if user["twofa_expires"]:
+        expires = datetime.fromisoformat(user["twofa_expires"])
+        if datetime.now() > expires:
+            conn.close()
+            return render_template("login.html", step="twofa",
+                                   user_id=user_id, masked_email=mask_email(user["email"]),
+                                   error="Code expired. Please request a new one.")
+
+    # Verify code
+    if not user["twofa_code"] or not check_password_hash(user["twofa_code"], code):
+        conn.close()
+        return render_template("login.html", step="twofa",
+                               user_id=user_id, masked_email=mask_email(user["email"]),
+                               error="Invalid code. Please try again.")
+
+    # Success — clear 2FA code and log in
+    conn.execute("UPDATE users SET twofa_code = NULL, twofa_expires = NULL, last_login = ? WHERE id = ?",
+                 (datetime.now().isoformat(), user_id))
+    conn.commit()
+    conn.close()
+
+    session.permanent = True
+    session["user_id"] = user["id"]
+    session["user_email"] = user["email"]
+    session["user_name"] = user["display_name"]
+    session["is_admin"] = bool(user["is_admin"])
+
+    return redirect("/")
+
+
+@app.route("/auth/resend-2fa", methods=["POST"])
+def auth_resend_2fa():
+    """Resend 2FA code."""
+    user_id = request.form.get("user_id", type=int)
+    if not user_id:
+        return redirect("/auth/login")
+
+    conn = get_db()
+    user = conn.execute("SELECT * FROM users WHERE id = ? AND is_active = 1", (user_id,)).fetchone()
+    if not user:
+        conn.close()
+        return redirect("/auth/login")
+
+    code = generate_2fa_code()
+    expires = datetime.now() + timedelta(minutes=10)
+    conn.execute("UPDATE users SET twofa_code = ?, twofa_expires = ? WHERE id = ?",
+                 (generate_password_hash(code), expires.isoformat(), user_id))
+    conn.commit()
+    conn.close()
+
+    send_2fa_email(user["email"], code, user["display_name"])
+
+    return render_template("login.html", step="twofa",
+                           user_id=user_id, masked_email=mask_email(user["email"]),
+                           success="New code sent! Check your email.")
+
+
+@app.route("/auth/logout")
+def auth_logout():
+    """Log out and clear session."""
+    session.clear()
+    return redirect("/auth/login")
+
+
+# ─── USER MANAGEMENT (Admin only) ──────────────────────────────
+
+
+@app.route("/api/users", methods=["GET"])
+@admin_required
+def get_users():
+    """List all users (admin only)."""
+    conn = get_db()
+    users = conn.execute("SELECT id, email, display_name, is_admin, is_active, created_at, last_login FROM users ORDER BY created_at").fetchall()
+    conn.close()
+    return jsonify([dict(u) for u in users])
+
+
+@app.route("/api/users", methods=["POST"])
+@admin_required
+def create_user():
+    """Create/invite a new user (admin only)."""
+    data = request.json
+    email = data.get("email", "").strip().lower()
+    display_name = data.get("display_name", "").strip()
+    password = data.get("password", "").strip()
+    is_admin = data.get("is_admin", False)
+
+    if not email or not password or not display_name:
+        return jsonify({"error": "Email, name, and password are required"}), 400
+    if len(password) < 6:
+        return jsonify({"error": "Password must be at least 6 characters"}), 400
+
+    conn = get_db()
+    existing = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+    if existing:
+        conn.close()
+        return jsonify({"error": "A user with this email already exists"}), 409
+
+    conn.execute(
+        "INSERT INTO users (email, display_name, password_hash, is_admin) VALUES (?, ?, ?, ?)",
+        (email, display_name, generate_password_hash(password), 1 if is_admin else 0)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"message": f"User {email} created successfully"})
+
+
+@app.route("/api/users/<int:user_id>", methods=["DELETE"])
+@admin_required
+def delete_user(user_id):
+    """Deactivate a user (admin only)."""
+    if user_id == session.get("user_id"):
+        return jsonify({"error": "Cannot deactivate yourself"}), 400
+    conn = get_db()
+    conn.execute("UPDATE users SET is_active = 0 WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "User deactivated"})
+
+
+@app.route("/api/users/<int:user_id>/reset-password", methods=["POST"])
+@admin_required
+def reset_user_password(user_id):
+    """Reset a user's password (admin only)."""
+    data = request.json
+    new_password = data.get("password", "").strip()
+    if not new_password or len(new_password) < 6:
+        return jsonify({"error": "Password must be at least 6 characters"}), 400
+    conn = get_db()
+    conn.execute("UPDATE users SET password_hash = ? WHERE id = ?",
+                 (generate_password_hash(new_password), user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Password reset successfully"})
 
 
 # ─── API ROUTES ────────────────────────────────────────────────

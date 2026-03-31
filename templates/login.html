@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In — Medstar Media Social</title>
+    <style>
+        :root {
+            --bg-primary: #0f1117;
+            --bg-secondary: #1a1d27;
+            --bg-card: #222533;
+            --bg-hover: #2a2e3f;
+            --accent: #6c5ce7;
+            --accent-light: #a29bfe;
+            --green: #00cec9;
+            --red: #ff6b6b;
+            --text-primary: #e8e8ee;
+            --text-secondary: #8b8da3;
+            --text-muted: #5f6180;
+            --border: #2d3045;
+            --radius: 12px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .auth-container {
+            width: 100%; max-width: 420px; padding: 20px;
+        }
+        .auth-card {
+            background: var(--bg-card); border-radius: var(--radius);
+            border: 1px solid var(--border); padding: 40px 32px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        }
+        .auth-logo {
+            text-align: center; margin-bottom: 32px;
+        }
+        .auth-logo h1 {
+            font-size: 22px; font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-light), var(--green));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .auth-logo p {
+            font-size: 13px; color: var(--text-muted); margin-top: 4px;
+        }
+        .form-group { margin-bottom: 20px; }
+        .form-group label {
+            display: block; font-size: 13px; font-weight: 600;
+            color: var(--text-secondary); margin-bottom: 8px;
+        }
+        .form-group input {
+            width: 100%; padding: 12px 14px; border-radius: 8px;
+            border: 1px solid var(--border); background: var(--bg-primary);
+            color: var(--text-primary); font-size: 14px; outline: none;
+            transition: border 0.2s;
+        }
+        .form-group input:focus { border-color: var(--accent); }
+        .form-group input::placeholder { color: var(--text-muted); }
+        .btn-auth {
+            width: 100%; padding: 12px; border-radius: 8px; border: none;
+            background: var(--accent); color: white; font-size: 14px;
+            font-weight: 600; cursor: pointer; transition: all 0.2s;
+            margin-top: 8px;
+        }
+        .btn-auth:hover { background: #5b4bd5; box-shadow: 0 4px 16px rgba(108,92,231,0.4); }
+        .btn-auth:disabled { opacity: 0.5; cursor: not-allowed; }
+        .error-msg {
+            background: rgba(255,107,107,0.1); border: 1px solid rgba(255,107,107,0.3);
+            color: var(--red); padding: 10px 14px; border-radius: 8px;
+            font-size: 13px; margin-bottom: 20px; text-align: center;
+        }
+        .success-msg {
+            background: rgba(0,206,201,0.1); border: 1px solid rgba(0,206,201,0.3);
+            color: var(--green); padding: 10px 14px; border-radius: 8px;
+            font-size: 13px; margin-bottom: 20px; text-align: center;
+        }
+        .twofa-info {
+            text-align: center; color: var(--text-secondary); font-size: 13px;
+            margin-bottom: 20px; line-height: 1.6;
+        }
+        .twofa-info strong { color: var(--text-primary); }
+        .code-input {
+            text-align: center; font-size: 28px; letter-spacing: 12px;
+            font-weight: 700; font-family: monospace;
+        }
+        .resend-link {
+            display: block; text-align: center; margin-top: 16px;
+            color: var(--accent-light); font-size: 13px; cursor: pointer;
+            background: none; border: none; text-decoration: underline;
+        }
+        .resend-link:hover { color: var(--green); }
+        .back-link {
+            display: block; text-align: center; margin-top: 16px;
+            color: var(--text-muted); font-size: 13px; text-decoration: none;
+        }
+        .back-link:hover { color: var(--text-secondary); }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="auth-logo">
+                <h1>Medstar Media Social</h1>
+                <p>Instagram Analytics Dashboard</p>
+            </div>
+
+            {% if step == 'login' %}
+            <!-- Step 1: Email & Password -->
+            {% if error %}<div class="error-msg">{{ error }}</div>{% endif %}
+            <form method="POST" action="/auth/login">
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" name="email" placeholder="you@medstarmedia.com" required autofocus value="{{ email or '' }}">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" name="password" placeholder="Enter your password" required>
+                </div>
+                <button type="submit" class="btn-auth">Sign In</button>
+            </form>
+
+            {% elif step == 'twofa' %}
+            <!-- Step 2: 2FA Code -->
+            <div class="twofa-info">
+                A 6-digit verification code has been sent to<br>
+                <strong>{{ masked_email }}</strong>
+            </div>
+            {% if error %}<div class="error-msg">{{ error }}</div>{% endif %}
+            {% if success %}<div class="success-msg">{{ success }}</div>{% endif %}
+            <form method="POST" action="/auth/verify-2fa">
+                <input type="hidden" name="user_id" value="{{ user_id }}">
+                <div class="form-group">
+                    <label>Verification Code</label>
+                    <input type="text" name="code" class="code-input" placeholder="000000"
+                           maxlength="6" pattern="\d{6}" inputmode="numeric" required autofocus autocomplete="one-time-code">
+                </div>
+                <button type="submit" class="btn-auth">Verify & Sign In</button>
+            </form>
+            <form method="POST" action="/auth/resend-2fa" style="margin:0;">
+                <input type="hidden" name="user_id" value="{{ user_id }}">
+                <button type="submit" class="resend-link">Resend code</button>
+            </form>
+            <a href="/auth/login" class="back-link">← Back to sign in</a>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
