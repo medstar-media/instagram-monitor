@@ -818,12 +818,13 @@
             <button class="btn btn-secondary" onclick="copyAllCarouselIdeas()" style="font-size:12px;">📋 Copy All to Clipboard</button>
         </div>
         <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">
-            Concise slide-ready breakdowns from approved content topics. Hand these off to the graphics team.
+            Concise slide-ready breakdowns for the graphics team. Mark as Deployed, Save for Later, or Delete.
         </p>
         <div class="filters-bar">
             <select id="carouselStatusFilter" onchange="loadCarouselIdeas()">
-                <option value="approved" selected>Approved Topics</option>
-                <option value="">All Topics</option>
+                <option value="" selected>All Topics</option>
+                <option value="deployed">Deployed</option>
+                <option value="saved">Saved for Later</option>
                 <option value="pending">Pending</option>
             </select>
             <span id="carouselCount" style="color:var(--text-muted);font-size:13px;margin-left:8px;"></span>
@@ -1865,29 +1866,33 @@ async function loadCarouselIdeas() {
     if (data.length === 0) {
         container.innerHTML = `<div class="empty-state" style="padding:40px;text-align:center;">
             <div style="font-size:40px;margin-bottom:12px;">🎠</div>
-            <p>No carousel ideas yet. Approve topics in <strong>Chris's Hook Ideas</strong> first, then they'll appear here as slide-ready breakdowns.</p>
+            <p>No carousel ideas found. Add topics in <strong>Chris's Hook Ideas</strong> and they'll appear here as slide-ready breakdowns.</p>
         </div>`;
         return;
     }
 
+    // Separate active vs saved-for-later
+    const active = data.filter(i => i.status !== 'saved');
+    const saved = data.filter(i => i.status === 'saved');
+
     let html = '';
-    data.forEach(idea => {
+    function renderCarouselCard(idea) {
         const hooks = idea.hooks || [];
+        const isDeployed = idea.status === 'deployed';
+        const isSaved = idea.status === 'saved';
         let slidesHtml = '';
         hooks.forEach((hook, i) => {
-            // Condense hook text into a short slide headline (first sentence or up to 80 chars)
             let headline = hook.hook_text || '';
             if (headline.length > 80) {
                 const cut = headline.lastIndexOf(' ', 80);
-                headline = headline.substring(0, cut > 40 ? cut : 80) + '…';
+                headline = headline.substring(0, cut > 40 ? cut : 80) + '...';
             }
             slidesHtml += `<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 12px;background:var(--bg-primary);border-radius:8px;margin-bottom:4px;">
-                <span style="flex-shrink:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:700;">${i + 1}</span>
+                <span style="flex-shrink:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${isDeployed ? 'var(--green)' : 'var(--accent)'};color:#fff;font-size:11px;font-weight:700;">${i + 1}</span>
                 <span style="font-size:13px;color:var(--text-primary);line-height:1.4;">${headline}</span>
             </div>`;
         });
 
-        // Build talking points as brief CTA / caption notes
         let captionHtml = '';
         if (idea.talking_points) {
             const points = idea.talking_points.split('\n').filter(p => p.trim());
@@ -1897,14 +1902,31 @@ async function loadCarouselIdeas() {
             </div>`;
         }
 
-        html += `<div class="panel" style="margin-bottom:12px;" id="carousel-${idea.id}">
+        const borderStyle = isDeployed ? 'border-left:4px solid var(--green);background:rgba(0,184,148,0.04);' : '';
+        const deployedBadge = isDeployed ? '<span style="background:var(--green);color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;margin-left:8px;">DEPLOYED</span>' : '';
+
+        // Buttons
+        let buttonsHtml = '';
+        if (isSaved) {
+            buttonsHtml = `
+                <button onclick="updateCarouselStatus(${idea.id}, 'pending')" style="background:none;border:1px solid var(--accent);color:var(--accent-light);padding:4px 10px;border-radius:8px;cursor:pointer;font-size:11px;">Restore</button>
+                <button onclick="deleteCarouselIdea(${idea.id})" style="background:none;border:1px solid var(--red);color:var(--red);padding:4px 10px;border-radius:8px;cursor:pointer;font-size:11px;">Delete</button>`;
+        } else {
+            buttonsHtml = `
+                ${!isDeployed ? `<button onclick="updateCarouselStatus(${idea.id}, 'deployed')" style="background:none;border:1px solid var(--green);color:var(--green);padding:6px 10px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">Deployed</button>` : `<button onclick="updateCarouselStatus(${idea.id}, 'pending')" style="background:var(--green);border:none;color:#fff;padding:6px 10px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">DEPLOYED</button>`}
+                <button onclick="updateCarouselStatus(${idea.id}, 'saved')" style="background:none;border:1px solid var(--yellow, #fdcb6e);color:var(--yellow, #fdcb6e);padding:6px 10px;border-radius:8px;cursor:pointer;font-size:12px;">Save for Later</button>
+                <button onclick="deleteCarouselIdea(${idea.id})" style="background:none;border:1px solid var(--red);color:var(--red);padding:6px 10px;border-radius:8px;cursor:pointer;font-size:12px;">Delete</button>
+                <button onclick="copySingleCarousel(${idea.id})" style="background:none;border:1px solid var(--border);color:var(--text-secondary);padding:6px 10px;border-radius:8px;cursor:pointer;font-size:12px;" title="Copy this carousel">Copy</button>`;
+        }
+
+        return `<div class="panel" style="margin-bottom:12px;${borderStyle}" id="carousel-${idea.id}">
             <div class="panel-body" style="padding:16px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
                     <div>
-                        <h4 style="font-size:15px;color:var(--text-primary);margin:0;">${idea.question || idea.topic || 'Untitled'}</h4>
+                        <h4 style="font-size:15px;color:var(--text-primary);margin:0;">${idea.question || 'Untitled'}${deployedBadge}</h4>
                         <p style="font-size:12px;color:var(--text-muted);margin:2px 0 0;">${hooks.length} slide${hooks.length !== 1 ? 's' : ''}</p>
                     </div>
-                    <button onclick="copySingleCarousel(${idea.id})" style="background:none;border:1px solid var(--border);color:var(--text-secondary);padding:6px 10px;border-radius:8px;cursor:pointer;font-size:12px;" title="Copy this carousel">📋 Copy</button>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;">${buttonsHtml}</div>
                 </div>
                 <div style="display:flex;flex-direction:column;gap:4px;">
                     ${slidesHtml}
@@ -1912,9 +1934,45 @@ async function loadCarouselIdeas() {
                 ${captionHtml}
             </div>
         </div>`;
-    });
+    }
+
+    active.forEach(idea => { html += renderCarouselCard(idea); });
+
+    if (saved.length > 0) {
+        html += `<div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);">
+            <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Saved for Later (${saved.length})</p>`;
+        saved.forEach(idea => { html += renderCarouselCard(idea); });
+        html += '</div>';
+    }
 
     container.innerHTML = html;
+}
+
+async function updateCarouselStatus(id, status) {
+    const card = document.getElementById('carousel-' + id);
+    if (card) { card.style.transition = 'opacity 0.3s'; card.style.opacity = '0.4'; }
+    const res = await fetch('/api/content-ideas/' + id, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status})
+    });
+    if (res.ok) {
+        if (status === 'deployed') showToast('Marked as deployed!', 'success');
+        else if (status === 'saved') showToast('Saved for later', 'success');
+        else showToast('Restored', 'success');
+        loadCarouselIdeas();
+    }
+}
+
+async function deleteCarouselIdea(id) {
+    if (!confirm('Delete this carousel idea permanently?')) return;
+    const card = document.getElementById('carousel-' + id);
+    if (card) { card.style.transition = 'opacity 0.3s'; card.style.opacity = '0'; }
+    const res = await fetch('/api/content-ideas/' + id, { method: 'DELETE' });
+    if (res.ok) {
+        showToast('Carousel idea deleted', 'success');
+        loadCarouselIdeas();
+    }
 }
 
 function copySingleCarousel(id) {

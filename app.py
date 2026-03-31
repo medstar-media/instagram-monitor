@@ -934,7 +934,7 @@ def get_content_ideas():
     if status:
         query += " WHERE status = ?"
         params.append(status)
-    query += " ORDER BY CASE status WHEN 'approved' THEN 0 WHEN 'pending' THEN 1 WHEN 'declined' THEN 2 END, sort_order, id"
+    query += " ORDER BY CASE status WHEN 'deployed' THEN 0 WHEN 'approved' THEN 1 WHEN 'pending' THEN 2 WHEN 'saved' THEN 3 WHEN 'declined' THEN 4 END, sort_order, id"
     ideas = conn.execute(query, params).fetchall()
 
     # Get hooks grouped by content_idea_id
@@ -958,16 +958,27 @@ def get_content_ideas():
 
 @app.route("/api/content-ideas/<int:idea_id>", methods=["PATCH"])
 def update_content_idea(idea_id):
-    """Update content idea status: approved, declined, pending."""
+    """Update content idea status."""
     data = request.json
     new_status = data.get("status", "pending")
-    if new_status not in ("approved", "declined", "pending"):
+    if new_status not in ("approved", "declined", "pending", "deployed", "saved"):
         return jsonify({"error": "Invalid status"}), 400
     conn = get_db()
     conn.execute("UPDATE content_ideas SET status = ? WHERE id = ?", (new_status, idea_id))
     conn.commit()
     conn.close()
     return jsonify({"message": "Updated", "id": idea_id, "status": new_status})
+
+
+@app.route("/api/content-ideas/<int:idea_id>", methods=["DELETE"])
+def delete_content_idea(idea_id):
+    """Permanently delete a content idea and its hooks."""
+    conn = get_db()
+    conn.execute("DELETE FROM hook_ideas WHERE content_idea_id = ?", (idea_id,))
+    conn.execute("DELETE FROM content_ideas WHERE id = ?", (idea_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Deleted", "id": idea_id})
 
 
 @app.route("/api/hook-ideas", methods=["GET"])
