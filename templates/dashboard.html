@@ -534,25 +534,25 @@
         <div class="stat-grid" id="statCards">
             <div class="stat-card accent">
                 <div class="label">Profiles Tracked</div>
-                <div class="value" id="statProfiles">—</div>
+                <div class="value" id="statProfiles">-</div>
             </div>
             <div class="stat-card green">
                 <div class="label">Posts Collected</div>
-                <div class="value" id="statPosts">—</div>
+                <div class="value" id="statPosts">-</div>
             </div>
             <div class="stat-card pink">
                 <div class="label">Avg Engagement Rate</div>
-                <div class="value" id="statEngagement">—</div>
+                <div class="value" id="statEngagement">-</div>
             </div>
             <div class="stat-card orange">
                 <div class="label">Top Post Likes</div>
-                <div class="value" id="statTopLikes">—</div>
-                <div class="sub" id="statTopBy">—</div>
+                <div class="value" id="statTopLikes">-</div>
+                <div class="sub" id="statTopBy">-</div>
             </div>
             <div class="stat-card" style="--card-color: var(--orange);">
                 <div class="label">Total Saves</div>
-                <div class="value" id="statSaves" style="color:var(--orange)">—</div>
-                <div class="sub" id="statSavesAvg">—</div>
+                <div class="value" id="statSaves" style="color:var(--orange)">-</div>
+                <div class="sub" id="statSavesAvg">-</div>
             </div>
         </div>
 
@@ -1143,7 +1143,7 @@ async function loadOverview() {
         document.getElementById('statTopBy').textContent = `by @${stats.top_post.username}`;
     }
 
-    document.getElementById('statSaves').textContent = stats.total_saves > 0 ? formatNumber(stats.total_saves) : '—';
+    document.getElementById('statSaves').textContent = stats.total_saves > 0 ? formatNumber(stats.total_saves) : '-';
     document.getElementById('statSavesAvg').textContent = stats.total_saves > 0 ? `${stats.avg_saves} avg per post` : 'No save data yet';
 
     // Engagement chart
@@ -1232,7 +1232,7 @@ function renderPostsTable(posts, compact = false) {
         </tr></thead><tbody>`;
 
     posts.forEach((p, i) => {
-        const lcRatio = p.comments > 0 ? (p.likes / p.comments).toFixed(1) : '—';
+        const lcRatio = p.comments > 0 ? (p.likes / p.comments).toFixed(1) : '-';
         const isViral = p.profile_avg_er && p.engagement_rate >= p.profile_avg_er * 2;
         const saves = p.saves || 0;
         html += `<tr class="${isViral ? 'viral-row' : ''}">
@@ -1249,9 +1249,9 @@ function renderPostsTable(posts, compact = false) {
             <td><div class="caption-preview" title="${(p.caption||'').replace(/"/g, '&quot;')}">${truncate(p.caption, 60)}</div></td>
             <td class="metric">${formatNumber(p.likes)}</td>
             <td class="metric">${formatNumber(p.comments)}</td>
-            <td class="metric" style="color:var(--orange)">${saves > 0 ? formatNumber(saves) : '—'}</td>
+            <td class="metric" style="color:var(--orange)">${saves > 0 ? formatNumber(saves) : '-'}</td>
             <td><span class="ratio-badge">${lcRatio}</span></td>
-            ${!compact ? `<td class="metric">${p.is_video ? formatNumber(p.video_views) : '—'}</td>` : ''}
+            ${!compact ? `<td class="metric">${p.is_video ? formatNumber(p.video_views) : '-'}</td>` : ''}
             <td class="metric ${engagementColor(p.engagement_rate)}">${p.engagement_rate.toFixed(2)}%</td>
             <td style="color: var(--text-secondary); font-size: 12px">${timeAgo(p.posted_at)}</td>
             <td><a href="${p.post_url}" target="_blank" class="link">View ↗</a></td>
