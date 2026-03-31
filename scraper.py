@@ -86,6 +86,7 @@ def init_db():
             post_type TEXT,
             likes INTEGER DEFAULT 0,
             comments INTEGER DEFAULT 0,
+            saves INTEGER DEFAULT 0,
             video_views INTEGER DEFAULT 0,
             engagement_rate REAL DEFAULT 0.0,
             posted_at TIMESTAMP,
@@ -165,6 +166,12 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
     """)
     conn.commit()
+
+    # ── Migrate existing posts table if needed ──
+    post_cols = [r["name"] for r in conn.execute("PRAGMA table_info(posts)").fetchall()]
+    if "saves" not in post_cols:
+        conn.execute("ALTER TABLE posts ADD COLUMN saves INTEGER DEFAULT 0")
+        conn.commit()
 
     # ── Migrate existing hook_ideas table if needed ──
     cols = [r["name"] for r in conn.execute("PRAGMA table_info(hook_ideas)").fetchall()]
@@ -481,6 +488,7 @@ def scrape_profile(username, max_posts=30):
         node = edge.get("node", {})
         likes = node.get("edge_liked_by", {}).get("count", 0)
         comments = node.get("edge_media_to_comment", {}).get("count", 0)
+        saves = node.get("edge_saved", {}).get("count", node.get("saves", 0))
         is_video = node.get("is_video", False)
         typename = node.get("__typename", "")
 
@@ -510,6 +518,7 @@ def scrape_profile(username, max_posts=30):
             "post_type": post_type,
             "likes": likes,
             "comments": comments,
+            "saves": saves,
             "video_views": node.get("video_view_count", 0) if is_video else 0,
             "engagement_rate": engagement_rate,
             "posted_at": posted_at,
@@ -542,6 +551,7 @@ def scrape_profile(username, max_posts=30):
                 node = edge.get("node", {})
                 likes = node.get("edge_liked_by", {}).get("count", 0)
                 comments = node.get("edge_media_to_comment", {}).get("count", 0)
+                saves = node.get("edge_saved", {}).get("count", node.get("saves", 0))
                 is_video = node.get("is_video", False)
                 typename = node.get("__typename", "")
                 engagement_rate = 0.0
@@ -565,6 +575,7 @@ def scrape_profile(username, max_posts=30):
                     "post_type": post_type,
                     "likes": likes,
                     "comments": comments,
+                    "saves": saves,
                     "video_views": node.get("video_view_count", 0) if is_video else 0,
                     "engagement_rate": engagement_rate,
                     "posted_at": posted_at,
@@ -613,12 +624,13 @@ def save_scrape_results(result):
             conn.execute("""
                 INSERT INTO posts (
                     profile_id, shortcode, post_url, caption, post_type,
-                    likes, comments, video_views, engagement_rate,
+                    likes, comments, saves, video_views, engagement_rate,
                     posted_at, thumbnail_url, is_video, hashtags
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(shortcode) DO UPDATE SET
                     likes = excluded.likes,
                     comments = excluded.comments,
+                    saves = excluded.saves,
                     video_views = excluded.video_views,
                     engagement_rate = excluded.engagement_rate,
                     caption = excluded.caption,
@@ -627,7 +639,7 @@ def save_scrape_results(result):
             """, (
                 profile_id, post["shortcode"], post["post_url"],
                 post["caption"], post["post_type"], post["likes"],
-                post["comments"], post["video_views"],
+                post["comments"], post.get("saves", 0), post["video_views"],
                 post["engagement_rate"], post["posted_at"],
                 post["thumbnail_url"], 1 if post["is_video"] else 0,
                 post["hashtags"],

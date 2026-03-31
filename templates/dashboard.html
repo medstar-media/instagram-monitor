@@ -546,6 +546,11 @@
                 <div class="value" id="statTopLikes">—</div>
                 <div class="sub" id="statTopBy">—</div>
             </div>
+            <div class="stat-card" style="--card-color: var(--orange);">
+                <div class="label">Total Saves</div>
+                <div class="value" id="statSaves" style="color:var(--orange)">—</div>
+                <div class="sub" id="statSavesAvg">—</div>
+            </div>
         </div>
 
         <div class="chart-grid">
@@ -1113,6 +1118,9 @@ async function loadOverview() {
         document.getElementById('statTopBy').textContent = `by @${stats.top_post.username}`;
     }
 
+    document.getElementById('statSaves').textContent = stats.total_saves > 0 ? formatNumber(stats.total_saves) : '—';
+    document.getElementById('statSavesAvg').textContent = stats.total_saves > 0 ? `${stats.avg_saves} avg per post` : 'No save data yet';
+
     // Engagement chart
     if (stats.profiles_stats && stats.profiles_stats.length > 0) {
         const labels = stats.profiles_stats.map(p => '@' + p.username);
@@ -1190,6 +1198,7 @@ function renderPostsTable(posts, compact = false) {
             <th>Caption</th>
             <th>Likes</th>
             <th>Comments</th>
+            <th>Saves</th>
             <th>L:C</th>
             ${!compact ? '<th>Views</th>' : ''}
             <th>Eng. Rate</th>
@@ -1200,6 +1209,7 @@ function renderPostsTable(posts, compact = false) {
     posts.forEach((p, i) => {
         const lcRatio = p.comments > 0 ? (p.likes / p.comments).toFixed(1) : '—';
         const isViral = p.profile_avg_er && p.engagement_rate >= p.profile_avg_er * 2;
+        const saves = p.saves || 0;
         html += `<tr class="${isViral ? 'viral-row' : ''}">
             <td style="color: var(--text-muted)">${i + 1}${isViral ? ' <span class="viral-badge">VIRAL</span>' : ''}</td>
             <td>
@@ -1214,6 +1224,7 @@ function renderPostsTable(posts, compact = false) {
             <td><div class="caption-preview" title="${(p.caption||'').replace(/"/g, '&quot;')}">${truncate(p.caption, 60)}</div></td>
             <td class="metric">${formatNumber(p.likes)}</td>
             <td class="metric">${formatNumber(p.comments)}</td>
+            <td class="metric" style="color:var(--orange)">${saves > 0 ? formatNumber(saves) : '—'}</td>
             <td><span class="ratio-badge">${lcRatio}</span></td>
             ${!compact ? `<td class="metric">${p.is_video ? formatNumber(p.video_views) : '—'}</td>` : ''}
             <td class="metric ${engagementColor(p.engagement_rate)}">${p.engagement_rate.toFixed(2)}%</td>
@@ -1536,7 +1547,7 @@ async function loadAdRecs() {
                 <div style="flex:1;min-width:0;">
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
                         <span style="font-size:12px;padding:2px 8px;border-radius:4px;background:var(--bg-hover);color:var(--text-secondary)">${typeBadge}</span>
-                        <span style="font-size:12px;color:var(--text-muted)">${formatNumber(post.likes)} likes · ${formatNumber(post.comments)} comments${post.video_views > 0 ? ' · ' + formatNumber(post.video_views) + ' views' : ''}</span>
+                        <span style="font-size:12px;color:var(--text-muted)">${formatNumber(post.likes)} likes · ${formatNumber(post.comments)} comments${post.saves > 0 ? ' · ' + formatNumber(post.saves) + ' saves' : ''}${post.video_views > 0 ? ' · ' + formatNumber(post.video_views) + ' views' : ''}</span>
                         <span style="font-size:12px;color:var(--accent-light)">${(post.engagement_rate * 100).toFixed(2)}% ER</span>
                     </div>
                     <p style="font-size:13px;color:var(--text-primary);margin:0 0 8px;line-height:1.5;">"${hook}"</p>

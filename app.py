@@ -606,6 +606,11 @@ def get_stats():
     """).fetchone()
     stats["top_post"] = dict(top) if top else None
 
+    # Total saves
+    saves_row = conn.execute("SELECT SUM(saves) as total_saves, AVG(saves) as avg_saves FROM posts WHERE saves > 0").fetchone()
+    stats["total_saves"] = saves_row["total_saves"] or 0
+    stats["avg_saves"] = round(saves_row["avg_saves"] or 0, 1)
+
     # Posts by type
     types = conn.execute("""
         SELECT post_type, COUNT(*) as count FROM posts GROUP BY post_type
@@ -618,6 +623,7 @@ def get_stats():
                AVG(po.engagement_rate) as avg_engagement,
                SUM(po.likes) as total_likes,
                SUM(po.comments) as total_comments,
+               SUM(po.saves) as total_saves,
                COUNT(po.id) as post_count
         FROM profiles pr
         LEFT JOIN posts po ON pr.id = po.profile_id
@@ -1147,29 +1153,33 @@ def get_ad_recommendations():
         er = p["engagement_rate"] or 0
         likes = p["likes"] or 0
         comments = p["comments"] or 0
+        saves = p.get("saves") or 0
         views = p["video_views"] or 0
         post_type = p["post_type"] or "image"
 
         # --- Scoring factors (each 0-1 range, weighted) ---
 
-        # 1. Engagement rate vs average (40% weight) - higher = proven content
+        # 1. Engagement rate vs average (35% weight) - higher = proven content
         er_score = min(er / max_er, 1.0) if max_er > 0 else 0
 
         # 2. Like volume (15% weight) - social proof for ads
         like_score = min(likes / (avg_likes * 3), 1.0) if avg_likes > 0 else 0
 
-        # 3. Comment volume (15% weight) - conversation-starting content
+        # 3. Comment volume (10% weight) - conversation-starting content
         comment_score = min(comments / (avg_comments * 3), 1.0) if avg_comments > 0 else 0
 
-        # 4. Video views bonus (10% weight) - video content scales better
+        # 4. Saves (10% weight) - saves signal high-value content worth boosting
+        save_score = min(saves / max(likes * 0.1, 1), 1.0) if saves > 0 else 0
+
+        # 5. Video views bonus (10% weight) - video content scales better
         view_score = 0
         if views > 0:
             view_score = min(views / 10000, 1.0)
 
-        # 5. Content type bonus (10% weight) - reels/video outperform in ads
+        # 6. Content type bonus (10% weight) - reels/video outperform in ads
         type_score = 0.9 if post_type == "video" else 0.7 if post_type == "carousel" else 0.4
 
-        # 6. Recency (10% weight) - fresher content performs better in ads
+        # 7. Recency (10% weight) - fresher content performs better in ads
         recency_score = 0.5
         try:
             from datetime import datetime as _dt
@@ -1181,9 +1191,10 @@ def get_ad_recommendations():
 
         # Weighted total
         total_score = (
-            er_score * 0.40 +
+            er_score * 0.35 +
             like_score * 0.15 +
-            comment_score * 0.15 +
+            comment_score * 0.10 +
+            save_score * 0.10 +
             view_score * 0.10 +
             type_score * 0.10 +
             recency_score * 0.10
@@ -1197,6 +1208,8 @@ def get_ad_recommendations():
             reasons.append(f"{likes} likes — strong social proof")
         if comments > avg_comments * 2:
             reasons.append(f"{comments} comments — high conversation potential")
+        if saves > 0:
+            reasons.append(f"{saves} saves — audience wants to revisit this")
         if views > 5000:
             reasons.append(f"{formatNumber_py(views)} views — proven reach")
         if post_type == "video":
