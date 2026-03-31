@@ -1644,7 +1644,7 @@ async function loadContentIdeas(container, status) {
                 <div class="panel-body" style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;">
                     <div style="display:flex;align-items:center;gap:8px;">
                         <span style="font-size:11px;padding:2px 8px;border-radius:12px;background:rgba(255,107,107,0.1);color:var(--red);font-weight:600;">DECLINED</span>
-                        <span style="font-size:13px;color:var(--text-secondary);">${idea.question}</span>
+                        <span style="font-size:13px;color:var(--text-secondary);">${idea.question || 'Untitled'}</span>
                     </div>
                     <button onclick="updateContentIdeaStatus(${idea.id}, 'pending')" style="background:none;border:1px solid var(--accent);color:var(--accent-light);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;" title="Restore this topic">↩ Restore</button>
                 </div>
@@ -1696,7 +1696,7 @@ async function loadContentIdeas(container, status) {
             <div class="panel-body" style="padding:14px 16px;">
                 <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;">
                     <div style="flex:1;">
-                        <h4 style="font-size:15px;color:var(--text-primary);margin:0 0 6px;line-height:1.4;">${idea.question}</h4>
+                        <h4 style="font-size:15px;color:var(--text-primary);margin:0 0 6px;line-height:1.4;">${idea.question || 'Untitled'}</h4>
                         <div style="display:flex;gap:6px;align-items:center;">
                             ${statusBadge}
                             <span style="font-size:11px;color:var(--text-muted);">${idea.hooks ? idea.hooks.length : 0} hooks</span>
@@ -1901,8 +1901,8 @@ async function loadCarouselIdeas() {
             <div class="panel-body" style="padding:16px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                     <div>
-                        <h4 style="font-size:15px;color:var(--text-primary);margin:0;">${idea.topic}</h4>
-                        <p style="font-size:12px;color:var(--text-muted);margin:2px 0 0;">${hooks.length} slides · ${idea.question || ''}</p>
+                        <h4 style="font-size:15px;color:var(--text-primary);margin:0;">${idea.question || idea.topic || 'Untitled'}</h4>
+                        <p style="font-size:12px;color:var(--text-muted);margin:2px 0 0;">${hooks.length} slide${hooks.length !== 1 ? 's' : ''}</p>
                     </div>
                     <button onclick="copySingleCarousel(${idea.id})" style="background:none;border:1px solid var(--border);color:var(--text-secondary);padding:6px 10px;border-radius:8px;cursor:pointer;font-size:12px;" title="Copy this carousel">📋 Copy</button>
                 </div>
