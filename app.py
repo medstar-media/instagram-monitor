@@ -106,18 +106,27 @@ def mask_email(email):
 
 
 def ensure_default_admin():
-    """Create a default admin account if no users exist."""
+    """Create or update the default admin account."""
     conn = get_db()
+    default_email = os.environ.get("ADMIN_EMAIL", "support@medstarmedia.com")
+    default_pass = os.environ.get("ADMIN_PASSWORD", "medstar2024!")
+
     count = conn.execute("SELECT COUNT(*) as c FROM users").fetchone()["c"]
     if count == 0:
-        default_email = os.environ.get("ADMIN_EMAIL", "admin@medstarmedia.com")
-        default_pass = os.environ.get("ADMIN_PASSWORD", "medstar2024!")
         conn.execute(
             "INSERT INTO users (email, display_name, password_hash, is_admin) VALUES (?, ?, ?, 1)",
-            (default_email, "Admin", generate_password_hash(default_pass))
+            (default_email, "Medstar Admin", generate_password_hash(default_pass))
         )
         conn.commit()
         print(f"[Auth] Default admin created: {default_email}")
+    else:
+        # Migrate old default admin email if it exists
+        old = conn.execute("SELECT id FROM users WHERE email = 'admin@medstarmedia.com'").fetchone()
+        if old and default_email != "admin@medstarmedia.com":
+            conn.execute("UPDATE users SET email = ?, display_name = ? WHERE id = ?",
+                         (default_email, "Medstar Admin", old["id"]))
+            conn.commit()
+            print(f"[Auth] Migrated admin email to: {default_email}")
     conn.close()
 
 
@@ -160,7 +169,7 @@ scrape_status = {"running": False, "message": "", "progress": 0, "total": 0}
 
 @app.route("/auth/login", methods=["GET", "POST"])
 def auth_login():
-    """Step 1: Email + Password login."""
+    """Email + Password login (logs in directly)."""
     if session.get("user_id"):
         return redirect("/")
 
@@ -177,19 +186,20 @@ def auth_login():
     if not user or not check_password_hash(user["password_hash"], password):
         return render_template("login.html", step="login", error="Invalid email or password.", email=email)
 
-    # Generate and send 2FA code
-    code = generate_2fa_code()
-    expires = datetime.now() + timedelta(minutes=10)
+    # Log in directly
     conn = get_db()
-    conn.execute("UPDATE users SET twofa_code = ?, twofa_expires = ? WHERE id = ?",
-                 (generate_password_hash(code), expires.isoformat(), user["id"]))
+    conn.execute("UPDATE users SET last_login = ? WHERE id = ?",
+                 (datetime.now().isoformat(), user["id"]))
     conn.commit()
     conn.close()
 
-    send_2fa_email(email, code, user["display_name"])
+    session.permanent = True
+    session["user_id"] = user["id"]
+    session["user_email"] = user["email"]
+    session["user_name"] = user["display_name"]
+    session["is_admin"] = bool(user["is_admin"])
 
-    return render_template("login.html", step="twofa",
-                           user_id=user["id"], masked_email=mask_email(email))
+    return redirect("/")
 
 
 @app.route("/auth/verify-2fa", methods=["POST"])

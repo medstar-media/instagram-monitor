@@ -78,26 +78,6 @@
             color: var(--green); padding: 10px 14px; border-radius: 8px;
             font-size: 13px; margin-bottom: 20px; text-align: center;
         }
-        .twofa-info {
-            text-align: center; color: var(--text-secondary); font-size: 13px;
-            margin-bottom: 20px; line-height: 1.6;
-        }
-        .twofa-info strong { color: var(--text-primary); }
-        .code-input {
-            text-align: center; font-size: 28px; letter-spacing: 12px;
-            font-weight: 700; font-family: monospace;
-        }
-        .resend-link {
-            display: block; text-align: center; margin-top: 16px;
-            color: var(--accent-light); font-size: 13px; cursor: pointer;
-            background: none; border: none; text-decoration: underline;
-        }
-        .resend-link:hover { color: var(--green); }
-        .back-link {
-            display: block; text-align: center; margin-top: 16px;
-            color: var(--text-muted); font-size: 13px; text-decoration: none;
-        }
-        .back-link:hover { color: var(--text-secondary); }
     </style>
 </head>
 <body>
@@ -108,8 +88,6 @@
                 <p>Instagram Analytics Dashboard</p>
             </div>
 
-            {% if step == 'login' %}
-            <!-- Step 1: Email & Password -->
             {% if error %}<div class="error-msg">{{ error }}</div>{% endif %}
             <form method="POST" action="/auth/login">
                 <div class="form-group">
@@ -122,30 +100,6 @@
                 </div>
                 <button type="submit" class="btn-auth">Sign In</button>
             </form>
-
-            {% elif step == 'twofa' %}
-            <!-- Step 2: 2FA Code -->
-            <div class="twofa-info">
-                A 6-digit verification code has been sent to<br>
-                <strong>{{ masked_email }}</strong>
-            </div>
-            {% if error %}<div class="error-msg">{{ error }}</div>{% endif %}
-            {% if success %}<div class="success-msg">{{ success }}</div>{% endif %}
-            <form method="POST" action="/auth/verify-2fa">
-                <input type="hidden" name="user_id" value="{{ user_id }}">
-                <div class="form-group">
-                    <label>Verification Code</label>
-                    <input type="text" name="code" class="code-input" placeholder="000000"
-                           maxlength="6" pattern="\d{6}" inputmode="numeric" required autofocus autocomplete="one-time-code">
-                </div>
-                <button type="submit" class="btn-auth">Verify & Sign In</button>
-            </form>
-            <form method="POST" action="/auth/resend-2fa" style="margin:0;">
-                <input type="hidden" name="user_id" value="{{ user_id }}">
-                <button type="submit" class="resend-link">Resend code</button>
-            </form>
-            <a href="/auth/login" class="back-link">← Back to sign in</a>
-            {% endif %}
         </div>
     </div>
 </body>
