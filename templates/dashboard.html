@@ -1664,7 +1664,32 @@ async function loadContentIdeas(container, status) {
             ? '<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:rgba(0,184,148,0.15);color:var(--green);font-weight:600;">APPROVED</span>'
             : '<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:rgba(108,92,231,0.15);color:var(--accent-light);">Pending</span>';
 
-        // Hooks list
+        // Parse talking points into sections mapped to hooks
+        let tpSections = [];
+        if (idea.talking_points && idea.talking_points.trim()) {
+            const raw = idea.talking_points.trim();
+            // Try splitting by numbered sections (1. 2. 3. etc)
+            const numbered = raw.split(/\n\s*\d+\.\s+/).filter(s => s.trim());
+            if (numbered.length > 1 || raw.match(/^\s*\d+\.\s+/)) {
+                // Has numbered sections - first split may have a header like "TALKING POINTS"
+                const cleaned = raw.replace(/^TALKING\s*POINTS\s*/i, '').trim();
+                const parts = cleaned.split(/\n\s*\d+\.\s+/);
+                // First part might be empty or a preamble
+                if (parts[0].trim().length < 10 && parts.length > 1) parts.shift();
+                tpSections = parts.map(p => p.trim()).filter(p => p.length > 0);
+            } else {
+                // Single block - split by sentences and distribute across hooks
+                const sentences = raw.split(/\.\s+/).filter(s => s.trim()).map(s => s.trim().replace(/\.$/, '') + '.');
+                const hookCount = (idea.hooks || []).length || 1;
+                const perHook = Math.ceil(sentences.length / hookCount);
+                for (let i = 0; i < hookCount; i++) {
+                    const chunk = sentences.slice(i * perHook, (i + 1) * perHook).join(' ');
+                    if (chunk) tpSections.push(chunk);
+                }
+            }
+        }
+
+        // Hooks list - clickable to show talking points
         let hooksHtml = '';
         if (idea.hooks && idea.hooks.length > 0) {
             idea.hooks.forEach((hook, idx) => {
@@ -1675,7 +1700,12 @@ async function loadContentIdeas(container, status) {
                     </div>
                     <span style="font-size:10px;color:${scoreColor};font-weight:600;">${hook.hook_score}</span>
                 </div>`;
-                hooksHtml += `<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;${idx > 0 ? 'border-top:1px solid var(--border);' : ''}">
+                const tpText = tpSections[idx] || tpSections[tpSections.length - 1] || '';
+                const tpHtml = tpText ? `<div id="hook-tp-${idea.id}-${idx}" style="display:none;margin:6px 0 2px;padding:8px 12px;background:rgba(108,92,231,0.06);border-radius:8px;border-left:3px solid var(--accent);">
+                    <p style="font-size:11px;font-weight:600;color:var(--accent-light);margin:0 0 4px;text-transform:uppercase;letter-spacing:0.5px;">Talking Points for Hook ${idx + 1}</p>
+                    <p style="font-size:12px;color:var(--text-primary);margin:0;line-height:1.5;">${tpText.replace(/\n/g, '<br>')}</p>
+                </div>` : '';
+                hooksHtml += `<div id="hook-row-${idea.id}-${idx}" onclick="selectHook(${idea.id}, ${idx}, ${(idea.hooks||[]).length})" style="display:flex;align-items:flex-start;gap:8px;padding:8px 6px;cursor:pointer;border-radius:6px;transition:background 0.2s;${idx > 0 ? 'border-top:1px solid var(--border);' : ''}" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="if(!this.classList.contains('hook-selected'))this.style.background='transparent'">
                     <span style="font-size:12px;color:var(--text-muted);min-width:18px;">${idx + 1}.</span>
                     <div style="flex:1;min-width:0;">
                         <p style="font-size:13px;color:var(--text-primary);margin:0 0 3px;line-height:1.4;">${hook.hook_text}</p>
@@ -1683,21 +1713,14 @@ async function loadContentIdeas(container, status) {
                             ${scoreBar}
                             ${hook.category ? `<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:var(--bg-hover);color:var(--text-muted);">${hook.category}</span>` : ''}
                         </div>
+                        ${tpHtml}
                     </div>
-                    <button onclick="copyHookText(\`${hook.hook_text.replace(/`/g,'\\`').replace(/\\/g,'\\\\')}\`)" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px;padding:4px;" title="Copy hook">📋</button>
+                    <button onclick="event.stopPropagation();copyHookText(\`${hook.hook_text.replace(/`/g,'\\`').replace(/\\/g,'\\\\')}\`)" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px;padding:4px;" title="Copy hook">📋</button>
                 </div>`;
             });
         }
 
-        // Talking points (expandable)
         let talkingHtml = '';
-        if (idea.talking_points && idea.talking_points.trim()) {
-            const points = idea.talking_points.split('\n').filter(p => p.trim());
-            talkingHtml = `<div id="tp-${idea.id}" style="display:none;margin-top:8px;padding:10px 12px;background:var(--bg-hover);border-radius:8px;">
-                <p style="font-size:11px;font-weight:600;color:var(--text-secondary);margin:0 0 6px;text-transform:uppercase;letter-spacing:0.5px;">Talking Points</p>
-                ${points.map(p => `<p style="font-size:13px;color:var(--text-primary);margin:0 0 4px;line-height:1.5;">• ${p.replace(/^[-•]\s*/, '')}</p>`).join('')}
-            </div>`;
-        }
 
         html += `<div class="panel" id="idea-${idea.id}" style="margin-bottom:10px;border-left:3px solid ${borderColor};${cardBg}transition:opacity 0.3s,transform 0.3s;">
             <div class="panel-body" style="padding:14px 16px;">
@@ -1707,7 +1730,7 @@ async function loadContentIdeas(container, status) {
                         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
                             ${statusBadge}
                             <span style="font-size:11px;color:var(--text-muted);">${idea.hooks ? idea.hooks.length : 0} hooks</span>
-                            ${idea.talking_points ? `<button onclick="document.getElementById('tp-${idea.id}').style.display=document.getElementById('tp-${idea.id}').style.display==='none'?'block':'none'" style="background:none;border:none;color:var(--accent-light);cursor:pointer;font-size:11px;padding:0;">Talking Points</button>` : ''}
+                            ${tpSections.length > 0 ? '<span style="font-size:11px;color:var(--text-muted);">Click a hook to see talking points</span>' : ''}
                         </div>
                     </div>
                     <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;">
@@ -1778,6 +1801,35 @@ async function loadScrapedHooks(container, status) {
         </div>`;
     });
     container.innerHTML = html;
+}
+
+function selectHook(ideaId, hookIdx, totalHooks) {
+    // Hide all talking point panels for this idea
+    for (let i = 0; i < totalHooks; i++) {
+        const tp = document.getElementById('hook-tp-' + ideaId + '-' + i);
+        const row = document.getElementById('hook-row-' + ideaId + '-' + i);
+        if (tp) tp.style.display = 'none';
+        if (row) {
+            row.classList.remove('hook-selected');
+            row.style.background = 'transparent';
+        }
+    }
+    // Toggle the clicked one
+    const tp = document.getElementById('hook-tp-' + ideaId + '-' + hookIdx);
+    const row = document.getElementById('hook-row-' + ideaId + '-' + hookIdx);
+    if (tp) {
+        const wasVisible = tp.style.display === 'block';
+        tp.style.display = wasVisible ? 'none' : 'block';
+        if (row) {
+            if (!wasVisible) {
+                row.classList.add('hook-selected');
+                row.style.background = 'var(--bg-hover)';
+            } else {
+                row.classList.remove('hook-selected');
+                row.style.background = 'transparent';
+            }
+        }
+    }
 }
 
 async function updateContentIdeaStatus(id, status) {
