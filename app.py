@@ -934,7 +934,7 @@ def get_content_ideas():
     if status:
         query += " WHERE status = ?"
         params.append(status)
-    query += " ORDER BY CASE status WHEN 'deployed' THEN 0 WHEN 'approved' THEN 1 WHEN 'pending' THEN 2 WHEN 'saved' THEN 3 WHEN 'declined' THEN 4 END, sort_order, id"
+    query += " ORDER BY CASE status WHEN 'video_made' THEN 0 WHEN 'deployed' THEN 1 WHEN 'approved' THEN 2 WHEN 'pending' THEN 3 WHEN 'saved' THEN 4 WHEN 'declined' THEN 5 END, sort_order, id"
     ideas = conn.execute(query, params).fetchall()
 
     # Get hooks grouped by content_idea_id
@@ -961,7 +961,7 @@ def update_content_idea(idea_id):
     """Update content idea status."""
     data = request.json
     new_status = data.get("status", "pending")
-    if new_status not in ("approved", "declined", "pending", "deployed", "saved"):
+    if new_status not in ("approved", "declined", "pending", "deployed", "saved", "video_made"):
         return jsonify({"error": "Invalid status"}), 400
     conn = get_db()
     conn.execute("UPDATE content_ideas SET status = ? WHERE id = ?", (new_status, idea_id))
@@ -981,9 +981,67 @@ def delete_content_idea(idea_id):
     return jsonify({"message": "Deleted", "id": idea_id})
 
 
+@app.route("/api/content-ideas/bulk", methods=["POST"])
+def bulk_add_content_ideas():
+    """Bulk add content ideas with hooks."""
+    import re as _re
+    data = request.json
+    ideas = data.get("ideas", [])
+    if not ideas:
+        return jsonify({"error": "No ideas provided"}), 400
+
+    conn = get_db()
+    added = 0
+    for item in ideas:
+        question = item.get("question", "").strip()
+        if not question:
+            continue
+        # Check for duplicates
+        existing = conn.execute("SELECT id FROM content_ideas WHERE question = ?", (question,)).fetchone()
+        if existing:
+            continue
+
+        talking_points = item.get("talking_points", "")
+        hooks_list = item.get("hooks", [])
+
+        cursor = conn.execute(
+            "INSERT INTO content_ideas (question, talking_points, status, sort_order) VALUES (?, ?, 'pending', 999)",
+            (question, talking_points)
+        )
+        idea_id = cursor.lastrowid
+
+        for idx, hook_text in enumerate(hooks_list):
+            hook_text = hook_text.strip()
+            if not hook_text or len(hook_text) < 10:
+                continue
+            hl = hook_text.lower()
+            if any(w in hl for w in ["how to", "here's how", "step", "guide", "tip"]):
+                cat = "How-To / Educational"
+            elif any(w in hl for w in ["?", "what if", "did you know", "why"]):
+                cat = "Question / Curiosity"
+            elif any(w in hl for w in ["most people", "nobody", "everyone", "stop", "don't"]):
+                cat = "Contrarian / Bold"
+            elif any(w in hl for w in ["result", "before", "after", "transform", "increase", "%"]):
+                cat = "Results / Proof"
+            elif any(w in hl for w in ["story", "when i", "i remember", "years ago"]):
+                cat = "Storytelling"
+            else:
+                cat = "General"
+            score = max(90 - idx * 10, 50)
+            conn.execute(
+                "INSERT INTO hook_ideas (hook_text, category, hook_score, content_idea_id, source_username, status) VALUES (?, ?, ?, ?, 'content-bulk', 'pending')",
+                (hook_text, cat, score, idea_id)
+            )
+        added += 1
+
+    conn.commit()
+    conn.close()
+    return jsonify({"message": f"Added {added} new content ideas", "added": added})
+
+
 @app.route("/api/hook-ideas", methods=["GET"])
 def get_hook_ideas():
-    """Get hook ideas — standalone ones not linked to content ideas."""
+    """Get hook ideas, standalone ones not linked to content ideas."""
     status = request.args.get("status", "")
     conn = get_db()
     query = "SELECT * FROM hook_ideas WHERE content_idea_id IS NULL"

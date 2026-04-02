@@ -804,7 +804,9 @@
             <select id="hookStatusFilter" onchange="loadHookIdeas()">
                 <option value="" selected>All</option>
                 <option value="pending">Pending Review</option>
-                <option value="approved">Approved ✅</option>
+                <option value="approved">Approved</option>
+                <option value="video_made">Video Made</option>
+                <option value="declined">Declined</option>
             </select>
             <span id="hookCount" style="color:var(--text-muted);font-size:13px;margin-left:8px;"></span>
         </div>
@@ -1638,8 +1640,9 @@ async function loadContentIdeas(container, status) {
     filtered.forEach(idea => {
         const isApproved = idea.status === 'approved';
         const isDeclined = idea.status === 'declined';
+        const isVideoMade = idea.status === 'video_made';
 
-        // ── Declined: render minimized at bottom ──
+        // Declined: render minimized at bottom
         if (isDeclined) {
             declinedHtml += `<div class="panel" id="idea-${idea.id}" style="margin-bottom:4px;border-left:3px solid var(--text-muted);opacity:0.45;">
                 <div class="panel-body" style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;">
@@ -1647,14 +1650,17 @@ async function loadContentIdeas(container, status) {
                         <span style="font-size:11px;padding:2px 8px;border-radius:12px;background:rgba(255,107,107,0.1);color:var(--red);font-weight:600;">DECLINED</span>
                         <span style="font-size:13px;color:var(--text-secondary);">${idea.question || 'Untitled'}</span>
                     </div>
-                    <button onclick="updateContentIdeaStatus(${idea.id}, 'pending')" style="background:none;border:1px solid var(--accent);color:var(--accent-light);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;" title="Restore this topic">↩ Restore</button>
+                    <button onclick="updateContentIdeaStatus(${idea.id}, 'pending')" style="background:none;border:1px solid var(--accent);color:var(--accent-light);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;" title="Restore this topic">Restore</button>
                 </div>
             </div>`;
             return;
         }
 
-        const borderColor = isApproved ? 'var(--green)' : 'var(--accent)';
-        const statusBadge = isApproved
+        const borderColor = isVideoMade ? 'var(--green)' : isApproved ? 'var(--green)' : 'var(--accent)';
+        const cardBg = isVideoMade ? 'background:rgba(0,184,148,0.06);' : '';
+        const statusBadge = isVideoMade
+            ? '<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:rgba(0,184,148,0.2);color:var(--green);font-weight:600;">VIDEO MADE</span>'
+            : isApproved
             ? '<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:rgba(0,184,148,0.15);color:var(--green);font-weight:600;">APPROVED</span>'
             : '<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:rgba(108,92,231,0.15);color:var(--accent-light);">Pending</span>';
 
@@ -1693,20 +1699,22 @@ async function loadContentIdeas(container, status) {
             </div>`;
         }
 
-        html += `<div class="panel" id="idea-${idea.id}" style="margin-bottom:10px;border-left:3px solid ${borderColor};transition:opacity 0.3s,transform 0.3s;">
+        html += `<div class="panel" id="idea-${idea.id}" style="margin-bottom:10px;border-left:3px solid ${borderColor};${cardBg}transition:opacity 0.3s,transform 0.3s;">
             <div class="panel-body" style="padding:14px 16px;">
-                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;">
-                    <div style="flex:1;">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap;">
+                    <div style="flex:1;min-width:200px;">
                         <h4 style="font-size:15px;color:var(--text-primary);margin:0 0 6px;line-height:1.4;">${idea.question || 'Untitled'}</h4>
-                        <div style="display:flex;gap:6px;align-items:center;">
+                        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
                             ${statusBadge}
                             <span style="font-size:11px;color:var(--text-muted);">${idea.hooks ? idea.hooks.length : 0} hooks</span>
-                            ${idea.talking_points ? `<button onclick="document.getElementById('tp-${idea.id}').style.display=document.getElementById('tp-${idea.id}').style.display==='none'?'block':'none'" style="background:none;border:none;color:var(--accent-light);cursor:pointer;font-size:11px;padding:0;">💡 Talking Points</button>` : ''}
+                            ${idea.talking_points ? `<button onclick="document.getElementById('tp-${idea.id}').style.display=document.getElementById('tp-${idea.id}').style.display==='none'?'block':'none'" style="background:none;border:none;color:var(--accent-light);cursor:pointer;font-size:11px;padding:0;">Talking Points</button>` : ''}
                         </div>
                     </div>
-                    <div style="display:flex;gap:6px;flex-shrink:0;">
-                        ${!isApproved ? `<button onclick="updateContentIdeaStatus(${idea.id}, 'approved')" style="background:none;border:1px solid var(--green);color:var(--green);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;" title="Approve this topic">✅ Approve</button>` : `<button onclick="updateContentIdeaStatus(${idea.id}, 'pending')" style="background:var(--green);border:none;color:#fff;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">APPROVED</button>`}
-                        <button onclick="updateContentIdeaStatus(${idea.id}, 'declined')" style="background:none;border:1px solid var(--red);color:var(--red);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;" title="Decline - minimizes to bottom">✕ Decline</button>
+                    <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;">
+                        ${isVideoMade ? `<button onclick="updateContentIdeaStatus(${idea.id}, 'approved')" style="background:var(--green);border:none;color:#fff;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">VIDEO MADE</button>` : `<button onclick="updateContentIdeaStatus(${idea.id}, 'video_made')" style="background:none;border:1px solid var(--green);color:var(--green);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">Video Made</button>`}
+                        ${!isApproved && !isVideoMade ? `<button onclick="updateContentIdeaStatus(${idea.id}, 'approved')" style="background:none;border:1px solid var(--accent);color:var(--accent-light);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;">Approve</button>` : ''}
+                        ${isApproved ? `<button onclick="updateContentIdeaStatus(${idea.id}, 'pending')" style="background:var(--accent);border:none;color:#fff;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">APPROVED</button>` : ''}
+                        <button onclick="updateContentIdeaStatus(${idea.id}, 'declined')" style="background:none;border:1px solid var(--red);color:var(--red);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;">Decline</button>
                     </div>
                 </div>
                 <div style="padding:4px 0;">${hooksHtml}</div>
@@ -1787,7 +1795,9 @@ async function updateContentIdeaStatus(id, status) {
         if (status === 'declined') {
             showToast('Topic declined, moved to bottom', 'success');
         } else if (status === 'approved') {
-            showToast('Topic approved! ✅', 'success');
+            showToast('Topic approved!', 'success');
+        } else if (status === 'video_made') {
+            showToast('Video made! Nice work.', 'success');
         } else {
             showToast('Topic restored', 'success');
         }
