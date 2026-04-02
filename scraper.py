@@ -179,6 +179,8 @@ def init_db():
         conn.execute("ALTER TABLE hook_ideas ADD COLUMN hook_score INTEGER DEFAULT 0")
     if "content_idea_id" not in cols:
         conn.execute("ALTER TABLE hook_ideas ADD COLUMN content_idea_id INTEGER")
+    if "talking_points" not in cols:
+        conn.execute("ALTER TABLE hook_ideas ADD COLUMN talking_points TEXT DEFAULT ''")
     conn.commit()
 
     # Seed the hashtag library if empty

@@ -1010,8 +1010,14 @@ def bulk_add_content_ideas():
         )
         idea_id = cursor.lastrowid
 
-        for idx, hook_text in enumerate(hooks_list):
-            hook_text = hook_text.strip()
+        for idx, hook_item in enumerate(hooks_list):
+            # Support both string hooks and object hooks with talking_points
+            if isinstance(hook_item, dict):
+                hook_text = hook_item.get("text", "").strip()
+                hook_tp = hook_item.get("talking_points", "")
+            else:
+                hook_text = str(hook_item).strip()
+                hook_tp = ""
             if not hook_text or len(hook_text) < 10:
                 continue
             hl = hook_text.lower()
@@ -1029,14 +1035,26 @@ def bulk_add_content_ideas():
                 cat = "General"
             score = max(90 - idx * 10, 50)
             conn.execute(
-                "INSERT INTO hook_ideas (hook_text, category, hook_score, content_idea_id, source_username, status) VALUES (?, ?, ?, ?, 'content-bulk', 'pending')",
-                (hook_text, cat, score, idea_id)
+                "INSERT INTO hook_ideas (hook_text, category, hook_score, content_idea_id, source_username, status, talking_points) VALUES (?, ?, ?, ?, 'content-bulk', 'pending', ?)",
+                (hook_text, cat, score, idea_id, hook_tp)
             )
         added += 1
 
     conn.commit()
     conn.close()
     return jsonify({"message": f"Added {added} new content ideas", "added": added})
+
+
+@app.route("/api/hook-ideas/<int:hook_id>/talking-points", methods=["PATCH"])
+def update_hook_talking_points(hook_id):
+    """Update talking points for a specific hook."""
+    data = request.json
+    tp = data.get("talking_points", "")
+    conn = get_db()
+    conn.execute("UPDATE hook_ideas SET talking_points = ? WHERE id = ?", (tp, hook_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Updated", "id": hook_id})
 
 
 @app.route("/api/hook-ideas", methods=["GET"])
