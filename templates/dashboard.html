@@ -1689,14 +1689,20 @@ async function loadContentIdeas(container, status) {
                 let tpRaw = (hook.talking_points || '').trim() || tpSections[idx] || '';
                 let bulletsHtml = '';
                 if (tpRaw) {
-                    // Split into bullet points by newline or bullet markers
-                    let bullets = tpRaw.split(/\n|(?:^|\s)[-•]\s/).filter(b => b.trim());
-                    // If still a single block, split by sentences
-                    if (bullets.length <= 1) {
-                        bullets = tpRaw.split(/\.\s+/).filter(b => b.trim()).map(b => b.trim().replace(/\.$/, ''));
+                    // First try splitting by newlines (our per-hook format)
+                    let bullets = tpRaw.split('\n').map(b => b.trim()).filter(b => b.length > 5);
+                    // If that didn't produce enough, try splitting by sentence endings
+                    if (bullets.length < 3) {
+                        bullets = tpRaw.split(/(?<=[.!?])\s+/).map(b => b.trim()).filter(b => b.length > 10);
                     }
-                    bulletsHtml = bullets.slice(0, 5).map(b =>
-                        `<li style="font-size:12px;color:var(--text-primary);line-height:1.5;margin-bottom:3px;">${b.replace(/^[-•]\s*/, '').trim()}</li>`
+                    // If still not enough, split by long phrases separated by commas or dashes
+                    if (bullets.length < 3) {
+                        bullets = tpRaw.split(/(?:,\s*|\s+[-]\s+)/).map(b => b.trim()).filter(b => b.length > 15);
+                    }
+                    // Clean up: remove leading bullets/numbers, trim, limit to 5
+                    bullets = bullets.map(b => b.replace(/^[\d]+[.)]\s*/, '').replace(/^[-•]\s*/, '').trim()).filter(b => b.length > 5).slice(0, 5);
+                    bulletsHtml = bullets.map(b =>
+                        `<li style="font-size:12px;color:var(--text-primary);line-height:1.5;margin-bottom:3px;">${b}</li>`
                     ).join('');
                 }
                 const tpHtml = bulletsHtml ? `<div id="hook-tp-${idea.id}-${idx}" style="display:none;margin:8px 0 2px;padding:10px 14px;background:rgba(108,92,231,0.06);border-radius:8px;border-left:3px solid var(--accent);">
