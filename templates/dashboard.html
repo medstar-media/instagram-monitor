@@ -2454,7 +2454,10 @@ function renderCdCards(items) {
                         <span style="font-size:20px;">${icon}</span>
                         <div>
                             <div style="font-weight:600;color:var(--text-primary);font-size:15px;">${item.content_piece || item.content_type}</div>
-                            <div style="font-size:12px;color:var(--text-secondary);">${item.content_type}${pillar ? ' - ' + pillar : ''}</div>
+                            <div style="font-size:12px;color:var(--text-secondary);display:flex;gap:8px;align-items:center;">
+                                <span style="background:var(--bg-hover);padding:2px 8px;border-radius:4px;font-weight:600;color:var(--accent-primary);">${item.month_week || 'Unscheduled'}</span>
+                                <span>${item.content_type}${pillar ? ' - ' + pillar : ''}</span>
+                            </div>
                         </div>
                     </div>
                     <div style="display:flex;gap:6px;align-items:center;">
