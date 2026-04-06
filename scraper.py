@@ -171,7 +171,11 @@ def init_db():
     post_cols = [r["name"] for r in conn.execute("PRAGMA table_info(posts)").fetchall()]
     if "saves" not in post_cols:
         conn.execute("ALTER TABLE posts ADD COLUMN saves INTEGER DEFAULT 0")
-        conn.commit()
+    if "shares" not in post_cols:
+        conn.execute("ALTER TABLE posts ADD COLUMN shares INTEGER DEFAULT 0")
+    if "follows" not in post_cols:
+        conn.execute("ALTER TABLE posts ADD COLUMN follows INTEGER DEFAULT 0")
+    conn.commit()
 
     # ── Migrate existing hook_ideas table if needed ──
     cols = [r["name"] for r in conn.execute("PRAGMA table_info(hook_ideas)").fetchall()]

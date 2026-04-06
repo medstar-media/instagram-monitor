@@ -654,6 +654,94 @@ def get_stats():
     return jsonify(stats)
 
 
+@app.route("/api/medstar-analytics", methods=["GET"])
+def medstar_analytics():
+    """Dedicated analytics for the medstarmedia profile."""
+    conn = get_db()
+
+    # Get medstarmedia profile
+    profile = conn.execute("SELECT * FROM profiles WHERE username = 'medstarmedia'").fetchone()
+    if not profile:
+        conn.close()
+        return jsonify({"error": "medstarmedia profile not found"}), 404
+
+    pid = profile["id"]
+
+    # All posts for medstarmedia sorted by scraped date
+    posts = conn.execute("""
+        SELECT * FROM posts WHERE profile_id = ? ORDER BY scraped_at DESC
+    """, (pid,)).fetchall()
+    posts_list = [dict(p) for p in posts]
+
+    # Summary metrics
+    total_likes = sum(p["likes"] for p in posts_list)
+    total_comments = sum(p["comments"] for p in posts_list)
+    total_saves = sum(p.get("saves", 0) or 0 for p in posts_list)
+    total_shares = sum(p.get("shares", 0) or 0 for p in posts_list)
+    total_views = sum(p.get("video_views", 0) or 0 for p in posts_list)
+    avg_engagement = sum(p.get("engagement_rate", 0) or 0 for p in posts_list) / max(len(posts_list), 1)
+
+    # Follower snapshots for growth chart
+    snapshots = conn.execute("""
+        SELECT follower_count, following_count, post_count, recorded_at
+        FROM follower_snapshots
+        WHERE profile_id = ?
+        ORDER BY recorded_at ASC
+    """, (pid,)).fetchall()
+    snapshots_list = [dict(s) for s in snapshots]
+
+    # Week-over-week growth calculations
+    wow = []
+    if len(snapshots_list) >= 2:
+        # Group snapshots by week
+        from datetime import datetime, timedelta
+        import collections
+        weekly = collections.OrderedDict()
+        for s in snapshots_list:
+            try:
+                dt = datetime.fromisoformat(s["recorded_at"].replace("Z", "+00:00")) if isinstance(s["recorded_at"], str) else s["recorded_at"]
+                week_key = dt.strftime("%Y-W%U")
+                weekly[week_key] = s
+            except Exception:
+                pass
+        weeks = list(weekly.items())
+        for i in range(1, len(weeks)):
+            prev = weeks[i-1][1]
+            curr = weeks[i][1]
+            follower_change = curr["follower_count"] - prev["follower_count"]
+            pct = round((follower_change / max(prev["follower_count"], 1)) * 100, 2)
+            wow.append({
+                "week": weeks[i][0],
+                "followers": curr["follower_count"],
+                "change": follower_change,
+                "change_pct": pct,
+                "posts": curr.get("post_count", 0)
+            })
+
+    # Top posts by engagement
+    top_posts = sorted(posts_list, key=lambda p: p.get("engagement_rate", 0) or 0, reverse=True)[:10]
+
+    conn.close()
+    return jsonify({
+        "profile": dict(profile),
+        "summary": {
+            "total_posts": len(posts_list),
+            "total_likes": total_likes,
+            "total_comments": total_comments,
+            "total_saves": total_saves,
+            "total_shares": total_shares,
+            "total_views": total_views,
+            "avg_engagement": round(avg_engagement * 100, 2),
+            "follower_count": profile["follower_count"],
+            "following_count": profile["following_count"]
+        },
+        "posts": posts_list,
+        "top_posts": top_posts,
+        "snapshots": snapshots_list,
+        "week_over_week": wow
+    })
+
+
 @app.route("/api/hooks", methods=["GET"])
 def get_hooks():
     """Analyze top-performing post hooks (opening lines of captions)."""

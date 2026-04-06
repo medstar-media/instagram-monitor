@@ -461,6 +461,9 @@
         <div class="nav-item" onclick="showPage('carousel-ideas')">
             <span class="nav-icon">🎠</span> <span>Carousel Ideas</span>
         </div>
+        <div class="nav-item" onclick="showPage('medstar-analytics')" style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px;">
+            <span class="nav-icon">📊</span> <span>Medstar Analytics</span>
+        </div>
         <div class="nav-item" onclick="showPage('industry-tags')">
             <span class="nav-icon">🏷️</span> <span>Industry Tags</span>
         </div>
@@ -834,6 +837,96 @@
         <div id="carouselIdeasContent"></div>
     </div>
 
+    <!-- ═══ MEDSTAR ANALYTICS PAGE ═══ -->
+    <div class="page-section" id="page-medstar-analytics">
+        <div class="page-header">
+            <h2>Medstar Media Analytics</h2>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">
+            Week-over-week growth, top posts, and key metrics for @medstarmedia.
+        </p>
+
+        <!-- Key Metrics Cards -->
+        <div class="stats-grid" id="medstarMetrics" style="margin-bottom:24px;">
+            <div class="stat-card"><div class="label">Followers</div><div class="value" id="msFollowers">-</div></div>
+            <div class="stat-card"><div class="label">Total Posts</div><div class="value" id="msTotalPosts">-</div></div>
+            <div class="stat-card"><div class="label">Total Likes</div><div class="value" id="msTotalLikes">-</div></div>
+            <div class="stat-card"><div class="label">Total Comments</div><div class="value" id="msTotalComments">-</div></div>
+            <div class="stat-card"><div class="label">Total Saves</div><div class="value" id="msTotalSaves" style="color:var(--orange)">-</div></div>
+            <div class="stat-card"><div class="label">Total Views</div><div class="value" id="msTotalViews">-</div></div>
+            <div class="stat-card"><div class="label">Avg Engagement</div><div class="value" id="msAvgEng" style="color:var(--green)">-</div></div>
+            <div class="stat-card"><div class="label">Total Shares</div><div class="value" id="msTotalShares">-</div></div>
+        </div>
+
+        <!-- Week-over-Week Growth Chart -->
+        <div class="panel" style="margin-bottom:20px;">
+            <div class="panel-body" style="padding:16px;">
+                <h3 style="font-size:15px;color:var(--text-primary);margin:0 0 12px;">Week-over-Week Follower Growth</h3>
+                <div style="position:relative;height:280px;">
+                    <canvas id="msGrowthChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Engagement Trend Chart -->
+        <div class="panel" style="margin-bottom:20px;">
+            <div class="panel-body" style="padding:16px;">
+                <h3 style="font-size:15px;color:var(--text-primary);margin:0 0 12px;">Post Performance Over Time</h3>
+                <div style="position:relative;height:280px;">
+                    <canvas id="msEngagementChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Posts Table -->
+        <div class="panel">
+            <div class="panel-body" style="padding:16px;">
+                <h3 style="font-size:15px;color:var(--text-primary);margin:0 0 12px;">Top Performing Posts</h3>
+                <div style="overflow-x:auto;">
+                    <table class="data-table" style="width:100%;">
+                        <thead>
+                            <tr>
+                                <th style="text-align:left;min-width:200px;">Caption</th>
+                                <th>Type</th>
+                                <th>Likes</th>
+                                <th>Comments</th>
+                                <th>Saves</th>
+                                <th>Shares</th>
+                                <th>Views</th>
+                                <th>Eng Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody id="msTopPostsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- All Posts Table -->
+        <div class="panel" style="margin-top:20px;">
+            <div class="panel-body" style="padding:16px;">
+                <h3 style="font-size:15px;color:var(--text-primary);margin:0 0 12px;">All Posts</h3>
+                <div style="overflow-x:auto;">
+                    <table class="data-table" style="width:100%;">
+                        <thead>
+                            <tr>
+                                <th style="text-align:left;min-width:200px;">Caption</th>
+                                <th>Type</th>
+                                <th>Likes</th>
+                                <th>Comments</th>
+                                <th>Saves</th>
+                                <th>Shares</th>
+                                <th>Views</th>
+                                <th>Eng Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody id="msAllPostsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ═══ INDUSTRY HASHTAGS PAGE ═══ -->
     <div class="page-section" id="page-industry-tags">
         <div class="page-header">
@@ -964,7 +1057,7 @@ function showPage(page) {
     document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.getElementById('page-' + page).classList.add('active');
-    const pages = ['overview','top-posts','hooks','profiles','all-posts','hashtags','timing','growth','ad-recs','hook-ideas','carousel-ideas','industry-tags','team'];
+    const pages = ['overview','top-posts','hooks','profiles','all-posts','hashtags','timing','growth','ad-recs','hook-ideas','carousel-ideas','medstar-analytics','industry-tags','team'];
     const idx = pages.indexOf(page);
     if (idx >= 0) document.querySelectorAll('.nav-item')[idx].classList.add('active');
     currentPage = page;
@@ -980,6 +1073,7 @@ function showPage(page) {
     if (page === 'ad-recs') loadAdRecs();
     if (page === 'hook-ideas') loadHookIdeas();
     if (page === 'carousel-ideas') loadCarouselIdeas();
+    if (page === 'medstar-analytics') loadMedstarAnalytics();
     if (page === 'industry-tags') loadIndustryTags();
     if (page === 'team') loadTeamPage();
 }
@@ -1914,6 +2008,131 @@ async function addCustomHook() {
     } else {
         showToast('Error adding hook', 'error');
     }
+}
+
+// ─── Medstar Analytics ───
+let msGrowthChart = null;
+let msEngChart = null;
+
+async function loadMedstarAnalytics() {
+    const data = await api('/api/medstar-analytics');
+    if (!data || data.error) return;
+
+    const s = data.summary;
+    document.getElementById('msFollowers').textContent = formatNumber(s.follower_count);
+    document.getElementById('msTotalPosts').textContent = s.total_posts;
+    document.getElementById('msTotalLikes').textContent = formatNumber(s.total_likes);
+    document.getElementById('msTotalComments').textContent = formatNumber(s.total_comments);
+    document.getElementById('msTotalSaves').textContent = formatNumber(s.total_saves);
+    document.getElementById('msTotalShares').textContent = formatNumber(s.total_shares);
+    document.getElementById('msTotalViews').textContent = formatNumber(s.total_views);
+    document.getElementById('msAvgEng').textContent = s.avg_engagement + '%';
+
+    // Week-over-Week Growth Chart
+    if (msGrowthChart) msGrowthChart.destroy();
+    const wow = data.week_over_week;
+    if (wow && wow.length > 0) {
+        const ctx = document.getElementById('msGrowthChart').getContext('2d');
+        msGrowthChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: wow.map(w => w.week),
+                datasets: [{
+                    label: 'Follower Change',
+                    data: wow.map(w => w.change),
+                    backgroundColor: wow.map(w => w.change >= 0 ? 'rgba(0,184,148,0.7)' : 'rgba(255,107,107,0.7)'),
+                    borderRadius: 6
+                }, {
+                    label: 'Total Followers',
+                    data: wow.map(w => w.followers),
+                    type: 'line',
+                    borderColor: '#6c5ce7',
+                    backgroundColor: 'rgba(108,92,231,0.1)',
+                    fill: true,
+                    yAxisID: 'y1',
+                    tension: 0.3,
+                    pointRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { labels: { color: '#b2bec3' } } },
+                scales: {
+                    x: { ticks: { color: '#636e72' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                    y: { ticks: { color: '#636e72' }, grid: { color: 'rgba(255,255,255,0.05)' }, title: { display: true, text: 'Change', color: '#b2bec3' } },
+                    y1: { position: 'right', ticks: { color: '#636e72' }, grid: { display: false }, title: { display: true, text: 'Followers', color: '#b2bec3' } }
+                }
+            }
+        });
+    } else {
+        document.getElementById('msGrowthChart').parentElement.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:40px;">Not enough data yet for week-over-week growth. Check back after a few scrapes.</p>';
+    }
+
+    // Post Performance Chart (likes, comments, saves per post)
+    if (msEngChart) msEngChart.destroy();
+    const posts = data.posts.slice(0, 30).reverse();
+    if (posts.length > 0) {
+        const ctx2 = document.getElementById('msEngagementChart').getContext('2d');
+        msEngChart = new Chart(ctx2, {
+            type: 'bar',
+            data: {
+                labels: posts.map((p, i) => 'Post ' + (i + 1)),
+                datasets: [
+                    { label: 'Likes', data: posts.map(p => p.likes), backgroundColor: 'rgba(255,118,117,0.7)', borderRadius: 4 },
+                    { label: 'Comments', data: posts.map(p => p.comments), backgroundColor: 'rgba(108,92,231,0.7)', borderRadius: 4 },
+                    { label: 'Saves', data: posts.map(p => p.saves || 0), backgroundColor: 'rgba(253,203,110,0.7)', borderRadius: 4 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { labels: { color: '#b2bec3' } }, tooltip: {
+                    callbacks: { title: (items) => { const p = posts[items[0].dataIndex]; return (p.caption || '').substring(0, 60) + '...'; } }
+                }},
+                scales: {
+                    x: { stacked: true, ticks: { color: '#636e72', maxRotation: 0 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                    y: { stacked: true, ticks: { color: '#636e72' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                }
+            }
+        });
+    }
+
+    // Top Posts Table
+    const topBody = document.getElementById('msTopPostsBody');
+    topBody.innerHTML = data.top_posts.map(p => {
+        const caption = (p.caption || '').substring(0, 80).replace(/</g, '&lt;');
+        const er = ((p.engagement_rate || 0) * 100).toFixed(2);
+        const type = p.is_video ? 'Video' : (p.post_type || 'Image');
+        return `<tr>
+            <td style="text-align:left;font-size:12px;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${caption || 'No caption'}${p.post_url ? ` <a href="${p.post_url}" target="_blank" style="color:var(--accent-light);text-decoration:none;">View</a>` : ''}</td>
+            <td><span style="font-size:11px;padding:2px 6px;border-radius:8px;background:var(--bg-hover);color:var(--text-secondary);">${type}</span></td>
+            <td class="metric" style="color:var(--red)">${formatNumber(p.likes)}</td>
+            <td class="metric" style="color:var(--accent-light)">${formatNumber(p.comments)}</td>
+            <td class="metric" style="color:var(--orange)">${formatNumber(p.saves || 0)}</td>
+            <td class="metric">${formatNumber(p.shares || 0)}</td>
+            <td class="metric">${p.video_views > 0 ? formatNumber(p.video_views) : '-'}</td>
+            <td class="metric" style="color:var(--green)">${er}%</td>
+        </tr>`;
+    }).join('');
+
+    // All Posts Table
+    const allBody = document.getElementById('msAllPostsBody');
+    allBody.innerHTML = data.posts.map(p => {
+        const caption = (p.caption || '').substring(0, 80).replace(/</g, '&lt;');
+        const er = ((p.engagement_rate || 0) * 100).toFixed(2);
+        const type = p.is_video ? 'Video' : (p.post_type || 'Image');
+        return `<tr>
+            <td style="text-align:left;font-size:12px;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${caption || 'No caption'}${p.post_url ? ` <a href="${p.post_url}" target="_blank" style="color:var(--accent-light);text-decoration:none;">View</a>` : ''}</td>
+            <td><span style="font-size:11px;padding:2px 6px;border-radius:8px;background:var(--bg-hover);color:var(--text-secondary);">${type}</span></td>
+            <td class="metric" style="color:var(--red)">${formatNumber(p.likes)}</td>
+            <td class="metric" style="color:var(--accent-light)">${formatNumber(p.comments)}</td>
+            <td class="metric" style="color:var(--orange)">${formatNumber(p.saves || 0)}</td>
+            <td class="metric">${formatNumber(p.shares || 0)}</td>
+            <td class="metric">${p.video_views > 0 ? formatNumber(p.video_views) : '-'}</td>
+            <td class="metric" style="color:var(--green)">${er}%</td>
+        </tr>`;
+    }).join('');
 }
 
 // ─── Carousel Ideas ───
