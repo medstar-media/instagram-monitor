@@ -343,34 +343,44 @@ def _seed_content_development(conn):
 def _seed_b_roll_ideas(conn):
     """Import B-Roll ideas from CSV if the table is empty."""
     import csv as _csv
-    existing = conn.execute("SELECT COUNT(*) as c FROM b_roll_ideas").fetchone()["c"]
+    existing = conn.execute("SELECT COUNT(*) as c FROM b_roll_ideas WHERE shot_description != ''").fetchone()["c"]
     if existing > 0:
         return
+    # Clear any bad data from previous failed imports
+    conn.execute("DELETE FROM b_roll_ideas")
 
     csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "b_roll_ideas.csv")
     if not os.path.exists(csv_path):
         return
 
     with open(csv_path, "r", encoding="utf-8-sig") as f:
-        reader = _csv.DictReader(f)
-        count = 0
-        last_month = ""
-        for row in reader:
-            month = (row.get("Month") or "").strip()
-            shot = (row.get("Shot Description") or "").strip()
-            notes = (row.get("Notes / Direction") or "").strip()
-            status = (row.get("Status") or "To Film").strip()
-            if month:
-                last_month = month
-            if not shot:
-                continue  # skip empty rows
-            conn.execute("""INSERT INTO b_roll_ideas
-                (month, shot_description, notes_direction, status)
-                VALUES (?, ?, ?, ?)""",
-                (last_month, shot, notes, status))
-            count += 1
-        conn.commit()
-        print(f"Imported {count} B-Roll ideas from CSV")
+        lines = f.readlines()
+    # Find the real header row (first row containing 'Month')
+    header_idx = 0
+    for i, line in enumerate(lines):
+        if "Month" in line and "Shot Description" in line:
+            header_idx = i
+            break
+    clean_lines = lines[header_idx:]
+    reader = _csv.DictReader(clean_lines)
+    count = 0
+    last_month = ""
+    for row in reader:
+        month = (row.get("Month") or "").strip()
+        shot = (row.get("Shot Description") or "").strip()
+        notes = (row.get("Notes / Direction") or "").strip()
+        status = (row.get("Status") or "To Film").strip()
+        if month:
+            last_month = month
+        if not shot:
+            continue  # skip empty rows
+        conn.execute("""INSERT INTO b_roll_ideas
+            (month, shot_description, notes_direction, status)
+            VALUES (?, ?, ?, ?)""",
+            (last_month, shot, notes, status))
+        count += 1
+    conn.commit()
+    print(f"Imported {count} B-Roll ideas from CSV")
 
 
 def _seed_hashtag_library(conn):

@@ -2009,7 +2009,15 @@ def upload_b_roll_csv():
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
     f = request.files["file"]
-    stream = io.StringIO(f.stream.read().decode("utf-8-sig"))
+    raw = f.stream.read().decode("utf-8-sig")
+    lines = raw.splitlines(True)
+    # Find real header row
+    header_idx = 0
+    for i, line in enumerate(lines):
+        if "Month" in line and "Shot Description" in line:
+            header_idx = i
+            break
+    stream = io.StringIO("".join(lines[header_idx:]))
     reader = _csv.DictReader(stream)
     conn = get_db()
     conn.execute("DELETE FROM b_roll_ideas")
