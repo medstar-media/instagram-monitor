@@ -1934,6 +1934,106 @@ def upload_content_development_csv():
     return jsonify({"ok": True, "imported": count})
 
 
+# ── B-Roll Ideas endpoints ───────────────────────────────────────────
+
+@app.route("/api/b-roll-ideas", methods=["GET"])
+def get_b_roll_ideas():
+    """Return all B-Roll ideas."""
+    conn = get_db()
+    rows = conn.execute("SELECT * FROM b_roll_ideas ORDER BY id ASC").fetchall()
+    conn.close()
+    items = []
+    for r in rows:
+        items.append({
+            "id": r["id"],
+            "month": r["month"],
+            "shot_description": r["shot_description"],
+            "notes_direction": r["notes_direction"],
+            "status": r["status"],
+        })
+    return jsonify(items)
+
+
+@app.route("/api/b-roll-ideas/<int:item_id>", methods=["PATCH"])
+def update_b_roll_idea(item_id):
+    """Update a B-Roll idea."""
+    data = request.json
+    conn = get_db()
+    allowed = ["month", "shot_description", "notes_direction", "status"]
+    sets = []
+    vals = []
+    for k in allowed:
+        if k in data:
+            sets.append(f"{k} = ?")
+            vals.append(data[k])
+    if sets:
+        sets.append("updated_at = CURRENT_TIMESTAMP")
+        vals.append(item_id)
+        conn.execute(f"UPDATE b_roll_ideas SET {', '.join(sets)} WHERE id = ?", vals)
+        conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/b-roll-ideas/<int:item_id>", methods=["DELETE"])
+def delete_b_roll_idea(item_id):
+    """Delete a B-Roll idea."""
+    conn = get_db()
+    conn.execute("DELETE FROM b_roll_ideas WHERE id = ?", (item_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/b-roll-ideas", methods=["POST"])
+def add_b_roll_idea():
+    """Add a single B-Roll idea."""
+    data = request.json
+    conn = get_db()
+    conn.execute("""INSERT INTO b_roll_ideas
+        (month, shot_description, notes_direction, status)
+        VALUES (?, ?, ?, ?)""",
+        (data.get("month",""), data.get("shot_description",""),
+         data.get("notes_direction",""), data.get("status","To Film")))
+    conn.commit()
+    new_id = conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
+    conn.close()
+    return jsonify({"ok": True, "id": new_id})
+
+
+@app.route("/api/b-roll-ideas/upload-csv", methods=["POST"])
+def upload_b_roll_csv():
+    """Upload a CSV to replace B-Roll ideas data."""
+    import csv as _csv
+    import io
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+    f = request.files["file"]
+    stream = io.StringIO(f.stream.read().decode("utf-8-sig"))
+    reader = _csv.DictReader(stream)
+    conn = get_db()
+    conn.execute("DELETE FROM b_roll_ideas")
+    count = 0
+    last_month = ""
+    for row in reader:
+        month = (row.get("Month") or "").strip()
+        shot = (row.get("Shot Description") or "").strip()
+        notes = (row.get("Notes / Direction") or "").strip()
+        status = (row.get("Status") or "To Film").strip()
+        if month:
+            last_month = month
+        if not shot:
+            continue
+        conn.execute("""INSERT INTO b_roll_ideas
+            (month, shot_description, notes_direction, status)
+            VALUES (?, ?, ?, ?)""",
+            (last_month, shot, notes, status))
+        count += 1
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "imported": count})
+
+
 if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("  MedStar Instagram Monitor")

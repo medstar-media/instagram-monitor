@@ -184,6 +184,16 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_cd_status ON content_development(status);
         CREATE INDEX IF NOT EXISTS idx_cd_week ON content_development(month_week);
+        CREATE TABLE IF NOT EXISTS b_roll_ideas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            month TEXT DEFAULT '',
+            shot_description TEXT DEFAULT '',
+            notes_direction TEXT DEFAULT '',
+            status TEXT DEFAULT 'To Film',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_broll_status ON b_roll_ideas(status);
     """)
     conn.commit()
 
@@ -213,6 +223,8 @@ def init_db():
     _seed_content_ideas(conn)
     # Seed content development from CSV if empty
     _seed_content_development(conn)
+    # Seed B-Roll ideas from CSV if empty
+    _seed_b_roll_ideas(conn)
     conn.close()
 
 
@@ -326,6 +338,39 @@ def _seed_content_development(conn):
             count += 1
         conn.commit()
         print(f"Imported {count} content development items from CSV")
+
+
+def _seed_b_roll_ideas(conn):
+    """Import B-Roll ideas from CSV if the table is empty."""
+    import csv as _csv
+    existing = conn.execute("SELECT COUNT(*) as c FROM b_roll_ideas").fetchone()["c"]
+    if existing > 0:
+        return
+
+    csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "b_roll_ideas.csv")
+    if not os.path.exists(csv_path):
+        return
+
+    with open(csv_path, "r", encoding="utf-8-sig") as f:
+        reader = _csv.DictReader(f)
+        count = 0
+        last_month = ""
+        for row in reader:
+            month = (row.get("Month") or "").strip()
+            shot = (row.get("Shot Description") or "").strip()
+            notes = (row.get("Notes / Direction") or "").strip()
+            status = (row.get("Status") or "To Film").strip()
+            if month:
+                last_month = month
+            if not shot:
+                continue  # skip empty rows
+            conn.execute("""INSERT INTO b_roll_ideas
+                (month, shot_description, notes_direction, status)
+                VALUES (?, ?, ?, ?)""",
+                (last_month, shot, notes, status))
+            count += 1
+        conn.commit()
+        print(f"Imported {count} B-Roll ideas from CSV")
 
 
 def _seed_hashtag_library(conn):

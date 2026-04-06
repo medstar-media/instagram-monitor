@@ -467,6 +467,9 @@
         <div class="nav-item" onclick="showPage('content-dev')">
             <span class="nav-icon">📋</span> <span>Content Development</span>
         </div>
+        <div class="nav-item" onclick="showPage('b-roll')">
+            <span class="nav-icon">🎥</span> <span>B-Roll Ideas</span>
+        </div>
         <div class="nav-item" onclick="showPage('industry-tags')">
             <span class="nav-icon">🏷️</span> <span>Industry Tags</span>
         </div>
@@ -966,6 +969,53 @@
         <div id="cdCards" style="display:flex;flex-direction:column;gap:16px;"></div>
     </div>
 
+    <!-- ═══ B-ROLL IDEAS PAGE ═══ -->
+    <div class="page-section" id="page-b-roll">
+        <div class="page-header">
+            <h2>B-Roll Ideas</h2>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <select id="brollFilterStatus" onchange="filterBRoll()" style="padding:8px 12px;border-radius:8px;background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);font-size:13px;">
+                    <option value="">All Statuses</option>
+                    <option value="To Film">To Film</option>
+                    <option value="Filmed">Filmed</option>
+                    <option value="Used">Used</option>
+                </select>
+                <button class="btn btn-primary" onclick="openAddBRollModal()">+ Add Shot</button>
+                <label class="btn btn-primary" style="cursor:pointer;margin:0;">
+                    Upload CSV
+                    <input type="file" accept=".csv" onchange="uploadBRollCSV(this)" style="display:none;">
+                </label>
+            </div>
+        </div>
+        <p style="color:var(--text-secondary);margin-bottom:16px;font-size:14px;">
+            B-Roll shot list for content production. Upload an updated CSV anytime to sync.
+        </p>
+        <div id="brollSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;"></div>
+        <div id="brollCards" style="display:flex;flex-direction:column;gap:12px;"></div>
+        <!-- Add B-Roll Modal -->
+        <div id="addBRollModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">
+            <div style="background:var(--bg-card);border-radius:16px;padding:24px;max-width:500px;width:90%;border:1px solid var(--border);">
+                <h3 style="color:var(--text-primary);margin-bottom:16px;">Add B-Roll Shot</h3>
+                <div style="margin-bottom:12px;">
+                    <label style="font-size:13px;color:var(--text-secondary);margin-bottom:4px;display:block;">Month</label>
+                    <input type="text" id="brollNewMonth" placeholder="e.g. April" style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid var(--border);font-size:14px;box-sizing:border-box;">
+                </div>
+                <div style="margin-bottom:12px;">
+                    <label style="font-size:13px;color:var(--text-secondary);margin-bottom:4px;display:block;">Shot Description</label>
+                    <textarea id="brollNewShot" rows="3" placeholder="Describe the shot..." style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid var(--border);font-size:14px;box-sizing:border-box;resize:vertical;"></textarea>
+                </div>
+                <div style="margin-bottom:16px;">
+                    <label style="font-size:13px;color:var(--text-secondary);margin-bottom:4px;display:block;">Notes / Direction</label>
+                    <textarea id="brollNewNotes" rows="2" placeholder="Any notes or reference links..." style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid var(--border);font-size:14px;box-sizing:border-box;resize:vertical;"></textarea>
+                </div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;">
+                    <button class="btn" onclick="closeAddBRollModal()" style="background:var(--bg-hover);color:var(--text-secondary);">Cancel</button>
+                    <button class="btn btn-primary" onclick="submitNewBRoll()">Add Shot</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ═══ INDUSTRY HASHTAGS PAGE ═══ -->
     <div class="page-section" id="page-industry-tags">
         <div class="page-header">
@@ -1096,7 +1146,7 @@ function showPage(page) {
     document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.getElementById('page-' + page).classList.add('active');
-    const pages = ['overview','top-posts','hooks','profiles','all-posts','hashtags','timing','growth','ad-recs','hook-ideas','carousel-ideas','medstar-analytics','content-dev','industry-tags','team'];
+    const pages = ['overview','top-posts','hooks','profiles','all-posts','hashtags','timing','growth','ad-recs','hook-ideas','carousel-ideas','medstar-analytics','content-dev','b-roll','industry-tags','team'];
     const idx = pages.indexOf(page);
     if (idx >= 0) document.querySelectorAll('.nav-item')[idx].classList.add('active');
     currentPage = page;
@@ -1114,6 +1164,7 @@ function showPage(page) {
     if (page === 'carousel-ideas') loadCarouselIdeas();
     if (page === 'medstar-analytics') loadMedstarAnalytics();
     if (page === 'content-dev') loadContentDev();
+    if (page === 'b-roll') loadBRollIdeas();
     if (page === 'industry-tags') loadIndustryTags();
     if (page === 'team') loadTeamPage();
 }
@@ -2558,6 +2609,161 @@ async function uploadContentDevCSV(input) {
     if (data.ok) {
         showToast('Imported ' + data.imported + ' content items');
         loadContentDev();
+    } else {
+        showToast('Upload failed: ' + (data.error || 'Unknown error'), 'error');
+    }
+    input.value = '';
+}
+
+// ─── B-Roll Ideas ───
+let brollData = [];
+
+async function loadBRollIdeas() {
+    const res = await fetch('/api/b-roll-ideas');
+    brollData = await res.json();
+    filterBRoll();
+}
+
+function filterBRoll() {
+    const statusF = document.getElementById('brollFilterStatus').value;
+    let filtered = brollData;
+    if (statusF) filtered = filtered.filter(d => d.status === statusF);
+    renderBRollSummary(filtered);
+    renderBRollCards(filtered);
+}
+
+function renderBRollSummary(items) {
+    const total = items.length;
+    const toFilm = items.filter(d => d.status === 'To Film').length;
+    const filmed = items.filter(d => d.status === 'Filmed').length;
+    const used = items.filter(d => d.status === 'Used').length;
+    document.getElementById('brollSummary').innerHTML = `
+        <div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">Total Shots</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#fdcb6e;">${toFilm}</div><div class="stat-label">To Film</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#74b9ff;">${filmed}</div><div class="stat-label">Filmed</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#00b894;">${used}</div><div class="stat-label">Used</div></div>
+    `;
+}
+
+function getBRollStatusColor(status) {
+    switch(status) {
+        case 'To Film': return '#fdcb6e';
+        case 'Filmed': return '#74b9ff';
+        case 'Used': return '#00b894';
+        default: return '#636e72';
+    }
+}
+
+function renderBRollCards(items) {
+    const container = document.getElementById('brollCards');
+    if (!items.length) {
+        container.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:40px;">No B-Roll shots found. Add one or upload a CSV.</div>';
+        return;
+    }
+    let html = '';
+    // Group by month
+    const groups = {};
+    items.forEach(item => {
+        const key = item.month || 'Unscheduled';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(item);
+    });
+
+    for (const [month, monthItems] of Object.entries(groups)) {
+        html += `<div style="margin-bottom:8px;">
+            <h3 style="color:var(--text-primary);font-size:16px;font-weight:600;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);">🎥 ${month}</h3>
+            <div style="display:flex;flex-direction:column;gap:10px;">`;
+
+        monthItems.forEach(item => {
+            const sc = getBRollStatusColor(item.status);
+            const hasNotes = (item.notes_direction || '').length > 0;
+            // Check if notes contain a link
+            const notesHtml = hasNotes ? escapeHtml(item.notes_direction).replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color:var(--accent-primary);text-decoration:underline;">$1</a>') : '';
+
+            html += `<div class="stat-card" style="padding:14px 16px;border-left:4px solid ${sc};display:flex;justify-content:space-between;align-items:center;gap:16px;">
+                <div style="flex:1;min-width:0;">
+                    <div style="font-weight:600;color:var(--text-primary);font-size:14px;margin-bottom:4px;">${escapeHtml(item.shot_description)}</div>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <span style="background:var(--bg-hover);padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;color:var(--accent-primary);">${month}</span>
+                        ${hasNotes ? `<span style="font-size:12px;color:var(--text-secondary);">${notesHtml}</span>` : ''}
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
+                    <select onchange="updateBRollStatus(${item.id}, this.value)" style="padding:4px 8px;border-radius:6px;background:rgba(${sc === '#fdcb6e' ? '253,203,110' : sc === '#74b9ff' ? '116,185,255' : '0,184,148'},0.15);color:${sc};border:1px solid ${sc};font-size:12px;font-weight:600;cursor:pointer;">
+                        <option value="To Film" ${item.status === 'To Film' ? 'selected' : ''}>To Film</option>
+                        <option value="Filmed" ${item.status === 'Filmed' ? 'selected' : ''}>Filmed</option>
+                        <option value="Used" ${item.status === 'Used' ? 'selected' : ''}>Used</option>
+                    </select>
+                    <button onclick="deleteBRollIdea(${item.id})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:4px;" title="Delete">x</button>
+                </div>
+            </div>`;
+        });
+        html += `</div></div>`;
+    }
+    container.innerHTML = html;
+}
+
+async function updateBRollStatus(id, status) {
+    await fetch('/api/b-roll-ideas/' + id, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status})
+    });
+    const item = brollData.find(d => d.id === id);
+    if (item) item.status = status;
+    filterBRoll();
+    showToast('Status updated to ' + status);
+}
+
+async function deleteBRollIdea(id) {
+    if (!confirm('Delete this B-Roll shot?')) return;
+    await fetch('/api/b-roll-ideas/' + id, {method: 'DELETE'});
+    brollData = brollData.filter(d => d.id !== id);
+    filterBRoll();
+    showToast('Shot deleted');
+}
+
+function openAddBRollModal() {
+    document.getElementById('addBRollModal').style.display = 'flex';
+}
+function closeAddBRollModal() {
+    document.getElementById('addBRollModal').style.display = 'none';
+}
+
+async function submitNewBRoll() {
+    const month = document.getElementById('brollNewMonth').value.trim();
+    const shot = document.getElementById('brollNewShot').value.trim();
+    const notes = document.getElementById('brollNewNotes').value.trim();
+    if (!shot) { showToast('Shot description is required', 'error'); return; }
+    const res = await fetch('/api/b-roll-ideas', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({month, shot_description: shot, notes_direction: notes, status: 'To Film'})
+    });
+    const data = await res.json();
+    if (data.ok) {
+        closeAddBRollModal();
+        document.getElementById('brollNewMonth').value = '';
+        document.getElementById('brollNewShot').value = '';
+        document.getElementById('brollNewNotes').value = '';
+        showToast('B-Roll shot added');
+        loadBRollIdeas();
+    }
+}
+
+async function uploadBRollCSV(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch('/api/b-roll-ideas/upload-csv', {
+        method: 'POST',
+        body: formData
+    });
+    const data = await res.json();
+    if (data.ok) {
+        showToast('Imported ' + data.imported + ' B-Roll shots');
+        loadBRollIdeas();
     } else {
         showToast('Upload failed: ' + (data.error || 'Unknown error'), 'error');
     }
