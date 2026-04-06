@@ -464,6 +464,9 @@
         <div class="nav-item" onclick="showPage('medstar-analytics')" style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px;">
             <span class="nav-icon">📊</span> <span>Medstar Analytics</span>
         </div>
+        <div class="nav-item" onclick="showPage('content-dev')">
+            <span class="nav-icon">📋</span> <span>Content Development</span>
+        </div>
         <div class="nav-item" onclick="showPage('industry-tags')">
             <span class="nav-icon">🏷️</span> <span>Industry Tags</span>
         </div>
@@ -927,6 +930,42 @@
         </div>
     </div>
 
+    <!-- ═══ CONTENT DEVELOPMENT PAGE ═══ -->
+    <div class="page-section" id="page-content-dev">
+        <div class="page-header">
+            <h2>Content Development</h2>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <select id="cdFilterWeek" onchange="filterContentDev()" style="padding:8px 12px;border-radius:8px;background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);font-size:13px;">
+                    <option value="">All Weeks</option>
+                </select>
+                <select id="cdFilterType" onchange="filterContentDev()" style="padding:8px 12px;border-radius:8px;background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);font-size:13px;">
+                    <option value="">All Types</option>
+                    <option value="Reel">Reels</option>
+                    <option value="Carousel">Carousels</option>
+                    <option value="Story">Stories</option>
+                </select>
+                <select id="cdFilterStatus" onchange="filterContentDev()" style="padding:8px 12px;border-radius:8px;background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);font-size:13px;">
+                    <option value="">All Statuses</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="In Review">In Review</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Published">Published</option>
+                </select>
+                <label class="btn btn-primary" style="cursor:pointer;margin:0;">
+                    Upload CSV
+                    <input type="file" accept=".csv" onchange="uploadContentDevCSV(this)" style="display:none;">
+                </label>
+            </div>
+        </div>
+        <p style="color:var(--text-secondary);margin-bottom:16px;font-size:14px;">
+            Content calendar with scripts, notes, and production status. Upload an updated CSV anytime to sync.
+        </p>
+        <!-- Summary stats -->
+        <div id="cdSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;"></div>
+        <!-- Content cards -->
+        <div id="cdCards" style="display:flex;flex-direction:column;gap:16px;"></div>
+    </div>
+
     <!-- ═══ INDUSTRY HASHTAGS PAGE ═══ -->
     <div class="page-section" id="page-industry-tags">
         <div class="page-header">
@@ -1057,7 +1096,7 @@ function showPage(page) {
     document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.getElementById('page-' + page).classList.add('active');
-    const pages = ['overview','top-posts','hooks','profiles','all-posts','hashtags','timing','growth','ad-recs','hook-ideas','carousel-ideas','medstar-analytics','industry-tags','team'];
+    const pages = ['overview','top-posts','hooks','profiles','all-posts','hashtags','timing','growth','ad-recs','hook-ideas','carousel-ideas','medstar-analytics','content-dev','industry-tags','team'];
     const idx = pages.indexOf(page);
     if (idx >= 0) document.querySelectorAll('.nav-item')[idx].classList.add('active');
     currentPage = page;
@@ -1074,6 +1113,7 @@ function showPage(page) {
     if (page === 'hook-ideas') loadHookIdeas();
     if (page === 'carousel-ideas') loadCarouselIdeas();
     if (page === 'medstar-analytics') loadMedstarAnalytics();
+    if (page === 'content-dev') loadContentDev();
     if (page === 'industry-tags') loadIndustryTags();
     if (page === 'team') loadTeamPage();
 }
@@ -2303,6 +2343,222 @@ let activeTagCategory = '';
 function debounceLoadIndustryTags() {
     clearTimeout(tagSearchTimer);
     tagSearchTimer = setTimeout(loadIndustryTags, 300);
+}
+
+// ─── Content Development ───
+let cdData = [];
+
+async function loadContentDev() {
+    const res = await fetch('/api/content-development');
+    cdData = await res.json();
+    populateCdWeekFilter();
+    filterContentDev();
+}
+
+function populateCdWeekFilter() {
+    const sel = document.getElementById('cdFilterWeek');
+    const weeks = [...new Set(cdData.map(d => d.month_week).filter(Boolean))];
+    // keep first option
+    sel.innerHTML = '<option value="">All Weeks</option>';
+    weeks.forEach(w => {
+        sel.innerHTML += `<option value="${w}">${w}</option>`;
+    });
+}
+
+function filterContentDev() {
+    const weekF = document.getElementById('cdFilterWeek').value;
+    const typeF = document.getElementById('cdFilterType').value;
+    const statusF = document.getElementById('cdFilterStatus').value;
+    let filtered = cdData;
+    if (weekF) filtered = filtered.filter(d => d.month_week === weekF);
+    if (typeF) filtered = filtered.filter(d => d.content_type === typeF);
+    if (statusF) filtered = filtered.filter(d => d.status === statusF);
+    renderCdSummary(filtered);
+    renderCdCards(filtered);
+}
+
+function renderCdSummary(items) {
+    const total = items.length;
+    const reels = items.filter(d => d.content_type === 'Reel').length;
+    const carousels = items.filter(d => d.content_type === 'Carousel').length;
+    const stories = items.filter(d => d.content_type === 'Story').length;
+    const inProg = items.filter(d => d.status === 'In Progress').length;
+    const inRev = items.filter(d => d.status === 'In Review').length;
+    const approved = items.filter(d => d.status === 'Approved').length;
+    const published = items.filter(d => d.status === 'Published').length;
+
+    document.getElementById('cdSummary').innerHTML = `
+        <div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">Total Pieces</div></div>
+        <div class="stat-card"><div class="stat-value">${reels}</div><div class="stat-label">Reels</div></div>
+        <div class="stat-card"><div class="stat-value">${carousels}</div><div class="stat-label">Carousels</div></div>
+        <div class="stat-card"><div class="stat-value">${stories}</div><div class="stat-label">Stories</div></div>
+        <div class="stat-card"><div class="stat-value">${inProg}</div><div class="stat-label">In Progress</div></div>
+        <div class="stat-card"><div class="stat-value">${inRev}</div><div class="stat-label">In Review</div></div>
+        <div class="stat-card"><div class="stat-value">${approved}</div><div class="stat-label">Approved</div></div>
+        <div class="stat-card"><div class="stat-value">${published}</div><div class="stat-label">Published</div></div>
+    `;
+}
+
+function getStatusColor(status) {
+    switch(status) {
+        case 'In Progress': return '#fdcb6e';
+        case 'In Review': return '#74b9ff';
+        case 'Approved': return '#00b894';
+        case 'Published': return '#a29bfe';
+        default: return '#636e72';
+    }
+}
+
+function getTypeIcon(type) {
+    switch(type) {
+        case 'Reel': return '🎬';
+        case 'Carousel': return '📸';
+        case 'Story': return '📱';
+        default: return '📄';
+    }
+}
+
+function renderCdCards(items) {
+    const container = document.getElementById('cdCards');
+    if (!items.length) {
+        container.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:40px;">No content found. Upload a CSV to get started.</div>';
+        return;
+    }
+    let html = '';
+    // Group by week
+    const groups = {};
+    items.forEach(item => {
+        const key = item.month_week || 'Unscheduled';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(item);
+    });
+
+    for (const [week, weekItems] of Object.entries(groups)) {
+        html += `<div style="margin-bottom:8px;">
+            <h3 style="color:var(--text-primary);font-size:16px;font-weight:600;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);">${week}</h3>
+            <div style="display:flex;flex-direction:column;gap:12px;">`;
+
+        weekItems.forEach(item => {
+            const statusCol = getStatusColor(item.status);
+            const icon = getTypeIcon(item.content_type);
+            const scriptPreview = (item.on_screen_text || '').substring(0, 200);
+            const hasScript = (item.on_screen_text || '').length > 0;
+            const hasBRoll = (item.b_roll || '').length > 0;
+            const hasNotes = (item.notes || '').length > 0;
+            const hasCaptionHook = (item.caption_hook || '').length > 0;
+            const pillar = item.content_pillar || '';
+
+            html += `<div class="stat-card" style="padding:16px;border-left:4px solid ${statusCol};" id="cd-card-${item.id}">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <span style="font-size:20px;">${icon}</span>
+                        <div>
+                            <div style="font-weight:600;color:var(--text-primary);font-size:15px;">${item.content_piece || item.content_type}</div>
+                            <div style="font-size:12px;color:var(--text-secondary);">${item.content_type}${pillar ? ' - ' + pillar : ''}</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <select onchange="updateCdStatus(${item.id}, this.value)" style="padding:4px 8px;border-radius:6px;background:rgba(${statusCol === '#fdcb6e' ? '253,203,110' : statusCol === '#74b9ff' ? '116,185,255' : statusCol === '#00b894' ? '0,184,148' : '162,155,254'},0.15);color:${statusCol};border:1px solid ${statusCol};font-size:12px;font-weight:600;cursor:pointer;">
+                            <option value="In Progress" ${item.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
+                            <option value="In Review" ${item.status === 'In Review' ? 'selected' : ''}>In Review</option>
+                            <option value="Approved" ${item.status === 'Approved' ? 'selected' : ''}>Approved</option>
+                            <option value="Published" ${item.status === 'Published' ? 'selected' : ''}>Published</option>
+                        </select>
+                    </div>
+                </div>`;
+
+            if (hasScript) {
+                html += `<div style="margin-bottom:10px;">
+                    <div style="font-size:11px;text-transform:uppercase;color:var(--text-secondary);font-weight:600;margin-bottom:4px;">Script / On-Screen Text</div>
+                    <div class="cd-script-preview" id="cd-script-${item.id}" style="font-size:13px;color:var(--text-secondary);line-height:1.5;white-space:pre-wrap;max-height:80px;overflow:hidden;cursor:pointer;" onclick="toggleCdScript(${item.id})">${escapeHtml(item.on_screen_text)}</div>
+                    ${(item.on_screen_text || '').length > 200 ? `<span onclick="toggleCdScript(${item.id})" style="color:var(--accent-primary);font-size:12px;cursor:pointer;" id="cd-toggle-${item.id}">Show more</span>` : ''}
+                </div>`;
+            }
+
+            if (hasBRoll) {
+                html += `<div style="margin-bottom:8px;">
+                    <span style="font-size:11px;text-transform:uppercase;color:var(--text-secondary);font-weight:600;">B-Roll: </span>
+                    <span style="font-size:13px;color:var(--text-secondary);">${escapeHtml(item.b_roll)}</span>
+                </div>`;
+            }
+
+            if (hasCaptionHook) {
+                html += `<div style="margin-bottom:8px;">
+                    <span style="font-size:11px;text-transform:uppercase;color:var(--text-secondary);font-weight:600;">Caption / Hook: </span>
+                    <span style="font-size:13px;color:var(--text-secondary);">${escapeHtml(item.caption_hook)}</span>
+                </div>`;
+            }
+
+            if (hasNotes) {
+                html += `<div style="margin-bottom:8px;">
+                    <span style="font-size:11px;text-transform:uppercase;color:var(--text-secondary);font-weight:600;">Notes: </span>
+                    <span style="font-size:13px;color:var(--yellow);">${escapeHtml(item.notes)}</span>
+                </div>`;
+            }
+
+            if (item.feedback) {
+                html += `<div style="margin-top:8px;padding:8px 12px;border-radius:6px;background:rgba(116,185,255,0.08);border:1px solid rgba(116,185,255,0.2);">
+                    <span style="font-size:11px;text-transform:uppercase;color:#74b9ff;font-weight:600;">Feedback: </span>
+                    <span style="font-size:13px;color:var(--text-secondary);">${escapeHtml(item.feedback)}</span>
+                </div>`;
+            }
+
+            html += `</div>`;
+        });
+
+        html += `</div></div>`;
+    }
+
+    container.innerHTML = html;
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function toggleCdScript(id) {
+    const el = document.getElementById('cd-script-' + id);
+    const toggle = document.getElementById('cd-toggle-' + id);
+    if (el.style.maxHeight === '80px' || el.style.maxHeight === '') {
+        el.style.maxHeight = 'none';
+        if (toggle) toggle.textContent = 'Show less';
+    } else {
+        el.style.maxHeight = '80px';
+        if (toggle) toggle.textContent = 'Show more';
+    }
+}
+
+async function updateCdStatus(id, status) {
+    await fetch('/api/content-development/' + id, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status})
+    });
+    // Update local data
+    const item = cdData.find(d => d.id === id);
+    if (item) item.status = status;
+    filterContentDev();
+    showToast('Status updated to ' + status);
+}
+
+async function uploadContentDevCSV(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch('/api/content-development/upload-csv', {
+        method: 'POST',
+        body: formData
+    });
+    const data = await res.json();
+    if (data.ok) {
+        showToast('Imported ' + data.imported + ' content items');
+        loadContentDev();
+    } else {
+        showToast('Upload failed: ' + (data.error || 'Unknown error'), 'error');
+    }
+    input.value = '';
 }
 
 async function loadIndustryTags() {

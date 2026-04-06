@@ -164,6 +164,26 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_hashtag_lib_cat ON hashtag_library(category);
         CREATE INDEX IF NOT EXISTS idx_hook_ideas_status ON hook_ideas(status);
         CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+        CREATE TABLE IF NOT EXISTS content_development (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            month_week TEXT DEFAULT '',
+            content_type TEXT DEFAULT '',
+            content_piece TEXT DEFAULT '',
+            b_roll TEXT DEFAULT '',
+            on_screen_text TEXT DEFAULT '',
+            notes TEXT DEFAULT '',
+            example_link TEXT DEFAULT '',
+            audio TEXT DEFAULT '',
+            caption_hook TEXT DEFAULT '',
+            format TEXT DEFAULT '',
+            content_pillar TEXT DEFAULT '',
+            status TEXT DEFAULT 'In Progress',
+            feedback TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_cd_status ON content_development(status);
+        CREATE INDEX IF NOT EXISTS idx_cd_week ON content_development(month_week);
     """)
     conn.commit()
 
@@ -191,6 +211,8 @@ def init_db():
     _seed_hashtag_library(conn)
     # Import content ideas from CSV if empty
     _seed_content_ideas(conn)
+    # Seed content development from CSV if empty
+    _seed_content_development(conn)
     conn.close()
 
 
@@ -275,6 +297,35 @@ def _seed_content_ideas(conn):
 
     conn.commit()
     print(f"Imported {imported} content ideas from CSV")
+
+
+def _seed_content_development(conn):
+    """Import content development items from CSV if the table is empty."""
+    import csv as _csv
+    existing = conn.execute("SELECT COUNT(*) as c FROM content_development").fetchone()["c"]
+    if existing > 0:
+        return
+
+    csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "content_development.csv")
+    if not os.path.exists(csv_path):
+        return
+
+    with open(csv_path, "r", encoding="utf-8-sig") as f:
+        reader = _csv.DictReader(f)
+        count = 0
+        for row in reader:
+            conn.execute("""INSERT INTO content_development
+                (month_week, content_type, content_piece, b_roll, on_screen_text,
+                 notes, example_link, audio, caption_hook, format, content_pillar, status, feedback)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (row.get("Month/Week",""), row.get("Content Type",""), row.get("Content Piece",""),
+                 row.get("B-Roll",""), row.get("On-Screen Text / Copy",""), row.get("Notes",""),
+                 row.get("Example Link",""), row.get("Audio",""), row.get("Caption Hook/Info",""),
+                 row.get("Format",""), row.get("Content Pillar",""), row.get("Status","In Progress"),
+                 row.get("Feedback","")))
+            count += 1
+        conn.commit()
+        print(f"Imported {count} content development items from CSV")
 
 
 def _seed_hashtag_library(conn):

@@ -1820,6 +1820,120 @@ def set_session():
     return jsonify({"message": "Session cookie saved successfully."})
 
 
+# ── Content Development endpoints ────────────────────────────────────
+
+@app.route("/api/content-development", methods=["GET"])
+def get_content_development():
+    """Return all content development items."""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM content_development ORDER BY id ASC"
+    ).fetchall()
+    conn.close()
+    items = []
+    for r in rows:
+        items.append({
+            "id": r["id"],
+            "month_week": r["month_week"],
+            "content_type": r["content_type"],
+            "content_piece": r["content_piece"],
+            "b_roll": r["b_roll"],
+            "on_screen_text": r["on_screen_text"],
+            "notes": r["notes"],
+            "example_link": r["example_link"],
+            "audio": r["audio"],
+            "caption_hook": r["caption_hook"],
+            "format": r["format"],
+            "content_pillar": r["content_pillar"],
+            "status": r["status"],
+            "feedback": r["feedback"],
+        })
+    return jsonify(items)
+
+
+@app.route("/api/content-development/<int:item_id>", methods=["PATCH"])
+def update_content_development(item_id):
+    """Update a content development item."""
+    data = request.json
+    conn = get_db()
+    allowed = ["month_week", "content_type", "content_piece", "b_roll",
+               "on_screen_text", "notes", "example_link", "audio",
+               "caption_hook", "format", "content_pillar", "status", "feedback"]
+    sets = []
+    vals = []
+    for k in allowed:
+        if k in data:
+            sets.append(f"{k} = ?")
+            vals.append(data[k])
+    if sets:
+        sets.append("updated_at = CURRENT_TIMESTAMP")
+        vals.append(item_id)
+        conn.execute(f"UPDATE content_development SET {', '.join(sets)} WHERE id = ?", vals)
+        conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/content-development/<int:item_id>", methods=["DELETE"])
+def delete_content_development(item_id):
+    """Delete a content development item."""
+    conn = get_db()
+    conn.execute("DELETE FROM content_development WHERE id = ?", (item_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/content-development", methods=["POST"])
+def add_content_development():
+    """Add a single content development item."""
+    data = request.json
+    conn = get_db()
+    conn.execute("""INSERT INTO content_development
+        (month_week, content_type, content_piece, b_roll, on_screen_text,
+         notes, example_link, audio, caption_hook, format, content_pillar, status, feedback)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (data.get("month_week",""), data.get("content_type",""), data.get("content_piece",""),
+         data.get("b_roll",""), data.get("on_screen_text",""), data.get("notes",""),
+         data.get("example_link",""), data.get("audio",""), data.get("caption_hook",""),
+         data.get("format",""), data.get("content_pillar",""), data.get("status","In Progress"),
+         data.get("feedback","")))
+    conn.commit()
+    new_id = conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
+    conn.close()
+    return jsonify({"ok": True, "id": new_id})
+
+
+@app.route("/api/content-development/upload-csv", methods=["POST"])
+def upload_content_development_csv():
+    """Upload a CSV to replace/merge content development data."""
+    import csv as _csv
+    import io
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+    f = request.files["file"]
+    stream = io.StringIO(f.stream.read().decode("utf-8-sig"))
+    reader = _csv.DictReader(stream)
+    conn = get_db()
+    # Clear existing and re-import
+    conn.execute("DELETE FROM content_development")
+    count = 0
+    for row in reader:
+        conn.execute("""INSERT INTO content_development
+            (month_week, content_type, content_piece, b_roll, on_screen_text,
+             notes, example_link, audio, caption_hook, format, content_pillar, status, feedback)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (row.get("Month/Week",""), row.get("Content Type",""), row.get("Content Piece",""),
+             row.get("B-Roll",""), row.get("On-Screen Text / Copy",""), row.get("Notes",""),
+             row.get("Example Link",""), row.get("Audio",""), row.get("Caption Hook/Info",""),
+             row.get("Format",""), row.get("Content Pillar",""), row.get("Status","In Progress"),
+             row.get("Feedback","")))
+        count += 1
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "imported": count})
+
+
 if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("  MedStar Instagram Monitor")
