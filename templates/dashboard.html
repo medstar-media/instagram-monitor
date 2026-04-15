@@ -953,6 +953,7 @@
                     <option value="In Review">In Review</option>
                     <option value="Approved">Approved</option>
                     <option value="Published">Published</option>
+                    <option value="Archived">Archived</option>
                 </select>
                 <label class="btn btn-primary" style="cursor:pointer;margin:0;">
                     Upload CSV
@@ -2456,6 +2457,7 @@ function getStatusColor(status) {
         case 'In Review': return '#74b9ff';
         case 'Approved': return '#00b894';
         case 'Published': return '#a29bfe';
+        case 'Archived': return '#636e72';
         default: return '#636e72';
     }
 }
@@ -2469,16 +2471,98 @@ function getTypeIcon(type) {
     }
 }
 
+function renderCdCard(item) {
+    const statusCol = getStatusColor(item.status);
+    const icon = getTypeIcon(item.content_type);
+    const isArchived = item.status === 'Archived';
+    const hasScript = (item.on_screen_text || '').length > 0;
+    const hasBRoll = (item.b_roll || '').length > 0;
+    const hasNotes = (item.notes || '').length > 0;
+    const hasCaptionHook = (item.caption_hook || '').length > 0;
+    const pillar = item.content_pillar || '';
+    const opacity = isArchived ? 'opacity:0.5;' : '';
+
+    let html = `<div class="stat-card" style="padding:16px;border-left:4px solid ${statusCol};${opacity}" id="cd-card-${item.id}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <span style="font-size:20px;">${icon}</span>
+                <div>
+                    <div style="font-weight:600;color:var(--text-primary);font-size:15px;">${item.content_piece || item.content_type}</div>
+                    <div style="font-size:12px;color:var(--text-secondary);display:flex;gap:8px;align-items:center;">
+                        <span style="background:var(--bg-hover);padding:2px 8px;border-radius:4px;font-weight:600;color:var(--accent-primary);">${item.month_week || 'Unscheduled'}</span>
+                        <span>${item.content_type}${pillar ? ' - ' + pillar : ''}</span>
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;">
+                ${isArchived
+                    ? `<button onclick="updateCdStatus(${item.id}, 'In Progress')" style="padding:4px 10px;border-radius:6px;background:rgba(0,184,148,0.15);color:#00b894;border:1px solid #00b894;font-size:12px;font-weight:600;cursor:pointer;">Restore</button>`
+                    : `<select onchange="updateCdStatus(${item.id}, this.value)" style="padding:4px 8px;border-radius:6px;background:rgba(${statusCol === '#fdcb6e' ? '253,203,110' : statusCol === '#74b9ff' ? '116,185,255' : statusCol === '#00b894' ? '0,184,148' : '162,155,254'},0.15);color:${statusCol};border:1px solid ${statusCol};font-size:12px;font-weight:600;cursor:pointer;">
+                        <option value="In Progress" ${item.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
+                        <option value="In Review" ${item.status === 'In Review' ? 'selected' : ''}>In Review</option>
+                        <option value="Approved" ${item.status === 'Approved' ? 'selected' : ''}>Approved</option>
+                        <option value="Published" ${item.status === 'Published' ? 'selected' : ''}>Published</option>
+                    </select>
+                    <button onclick="archiveCdItem(${item.id})" style="background:none;border:1px solid var(--red);border-radius:6px;color:var(--red);cursor:pointer;font-size:12px;padding:4px 8px;display:flex;align-items:center;gap:4px;" title="Archive">🗑 Archive</button>`
+                }
+            </div>
+        </div>`;
+
+    if (hasScript) {
+        html += `<div style="margin-bottom:10px;">
+            <div style="font-size:11px;text-transform:uppercase;color:var(--text-secondary);font-weight:600;margin-bottom:4px;">Script / On-Screen Text</div>
+            <div class="cd-script-preview" id="cd-script-${item.id}" style="font-size:13px;color:var(--text-secondary);line-height:1.5;white-space:pre-wrap;max-height:80px;overflow:hidden;cursor:pointer;" onclick="toggleCdScript(${item.id})">${escapeHtml(item.on_screen_text)}</div>
+            ${(item.on_screen_text || '').length > 200 ? `<span onclick="toggleCdScript(${item.id})" style="color:var(--accent-primary);font-size:12px;cursor:pointer;" id="cd-toggle-${item.id}">Show more</span>` : ''}
+        </div>`;
+    }
+
+    if (hasBRoll) {
+        html += `<div style="margin-bottom:8px;">
+            <span style="font-size:11px;text-transform:uppercase;color:var(--text-secondary);font-weight:600;">B-Roll: </span>
+            <span style="font-size:13px;color:var(--text-secondary);">${escapeHtml(item.b_roll)}</span>
+        </div>`;
+    }
+
+    if (hasCaptionHook) {
+        html += `<div style="margin-bottom:8px;">
+            <span style="font-size:11px;text-transform:uppercase;color:var(--text-secondary);font-weight:600;">Caption / Hook: </span>
+            <span style="font-size:13px;color:var(--text-secondary);">${escapeHtml(item.caption_hook)}</span>
+        </div>`;
+    }
+
+    if (hasNotes) {
+        html += `<div style="margin-bottom:8px;">
+            <span style="font-size:11px;text-transform:uppercase;color:var(--text-secondary);font-weight:600;">Notes: </span>
+            <span style="font-size:13px;color:var(--yellow);">${escapeHtml(item.notes)}</span>
+        </div>`;
+    }
+
+    if (item.feedback) {
+        html += `<div style="margin-top:8px;padding:8px 12px;border-radius:6px;background:rgba(116,185,255,0.08);border:1px solid rgba(116,185,255,0.2);">
+            <span style="font-size:11px;text-transform:uppercase;color:#74b9ff;font-weight:600;">Feedback: </span>
+            <span style="font-size:13px;color:var(--text-secondary);">${escapeHtml(item.feedback)}</span>
+        </div>`;
+    }
+
+    html += `</div>`;
+    return html;
+}
+
 function renderCdCards(items) {
     const container = document.getElementById('cdCards');
     if (!items.length) {
         container.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:40px;">No content found. Upload a CSV to get started.</div>';
         return;
     }
+
+    const activeItems = items.filter(i => i.status !== 'Archived');
+    const archivedItems = items.filter(i => i.status === 'Archived');
+
     let html = '';
-    // Group by week
+
+    // Group active items by week
     const groups = {};
-    items.forEach(item => {
+    activeItems.forEach(item => {
         const key = item.month_week || 'Unscheduled';
         if (!groups[key]) groups[key] = [];
         groups[key].push(item);
@@ -2488,82 +2572,47 @@ function renderCdCards(items) {
         html += `<div style="margin-bottom:8px;">
             <h3 style="color:var(--text-primary);font-size:16px;font-weight:600;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);">${week}</h3>
             <div style="display:flex;flex-direction:column;gap:12px;">`;
+        weekItems.forEach(item => { html += renderCdCard(item); });
+        html += `</div></div>`;
+    }
 
-        weekItems.forEach(item => {
-            const statusCol = getStatusColor(item.status);
-            const icon = getTypeIcon(item.content_type);
-            const scriptPreview = (item.on_screen_text || '').substring(0, 200);
-            const hasScript = (item.on_screen_text || '').length > 0;
-            const hasBRoll = (item.b_roll || '').length > 0;
-            const hasNotes = (item.notes || '').length > 0;
-            const hasCaptionHook = (item.caption_hook || '').length > 0;
-            const pillar = item.content_pillar || '';
-
-            html += `<div class="stat-card" style="padding:16px;border-left:4px solid ${statusCol};" id="cd-card-${item.id}">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
-                    <div style="display:flex;align-items:center;gap:10px;">
-                        <span style="font-size:20px;">${icon}</span>
-                        <div>
-                            <div style="font-weight:600;color:var(--text-primary);font-size:15px;">${item.content_piece || item.content_type}</div>
-                            <div style="font-size:12px;color:var(--text-secondary);display:flex;gap:8px;align-items:center;">
-                                <span style="background:var(--bg-hover);padding:2px 8px;border-radius:4px;font-weight:600;color:var(--accent-primary);">${item.month_week || 'Unscheduled'}</span>
-                                <span>${item.content_type}${pillar ? ' - ' + pillar : ''}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div style="display:flex;gap:6px;align-items:center;">
-                        <select onchange="updateCdStatus(${item.id}, this.value)" style="padding:4px 8px;border-radius:6px;background:rgba(${statusCol === '#fdcb6e' ? '253,203,110' : statusCol === '#74b9ff' ? '116,185,255' : statusCol === '#00b894' ? '0,184,148' : '162,155,254'},0.15);color:${statusCol};border:1px solid ${statusCol};font-size:12px;font-weight:600;cursor:pointer;">
-                            <option value="In Progress" ${item.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
-                            <option value="In Review" ${item.status === 'In Review' ? 'selected' : ''}>In Review</option>
-                            <option value="Approved" ${item.status === 'Approved' ? 'selected' : ''}>Approved</option>
-                            <option value="Published" ${item.status === 'Published' ? 'selected' : ''}>Published</option>
-                        </select>
-                    </div>
-                </div>`;
-
-            if (hasScript) {
-                html += `<div style="margin-bottom:10px;">
-                    <div style="font-size:11px;text-transform:uppercase;color:var(--text-secondary);font-weight:600;margin-bottom:4px;">Script / On-Screen Text</div>
-                    <div class="cd-script-preview" id="cd-script-${item.id}" style="font-size:13px;color:var(--text-secondary);line-height:1.5;white-space:pre-wrap;max-height:80px;overflow:hidden;cursor:pointer;" onclick="toggleCdScript(${item.id})">${escapeHtml(item.on_screen_text)}</div>
-                    ${(item.on_screen_text || '').length > 200 ? `<span onclick="toggleCdScript(${item.id})" style="color:var(--accent-primary);font-size:12px;cursor:pointer;" id="cd-toggle-${item.id}">Show more</span>` : ''}
-                </div>`;
-            }
-
-            if (hasBRoll) {
-                html += `<div style="margin-bottom:8px;">
-                    <span style="font-size:11px;text-transform:uppercase;color:var(--text-secondary);font-weight:600;">B-Roll: </span>
-                    <span style="font-size:13px;color:var(--text-secondary);">${escapeHtml(item.b_roll)}</span>
-                </div>`;
-            }
-
-            if (hasCaptionHook) {
-                html += `<div style="margin-bottom:8px;">
-                    <span style="font-size:11px;text-transform:uppercase;color:var(--text-secondary);font-weight:600;">Caption / Hook: </span>
-                    <span style="font-size:13px;color:var(--text-secondary);">${escapeHtml(item.caption_hook)}</span>
-                </div>`;
-            }
-
-            if (hasNotes) {
-                html += `<div style="margin-bottom:8px;">
-                    <span style="font-size:11px;text-transform:uppercase;color:var(--text-secondary);font-weight:600;">Notes: </span>
-                    <span style="font-size:13px;color:var(--yellow);">${escapeHtml(item.notes)}</span>
-                </div>`;
-            }
-
-            if (item.feedback) {
-                html += `<div style="margin-top:8px;padding:8px 12px;border-radius:6px;background:rgba(116,185,255,0.08);border:1px solid rgba(116,185,255,0.2);">
-                    <span style="font-size:11px;text-transform:uppercase;color:#74b9ff;font-weight:600;">Feedback: </span>
-                    <span style="font-size:13px;color:var(--text-secondary);">${escapeHtml(item.feedback)}</span>
-                </div>`;
-            }
-
-            html += `</div>`;
-        });
-
+    // Archived section at bottom
+    if (archivedItems.length > 0) {
+        html += `<div style="margin-top:24px;border-top:2px solid var(--border);padding-top:16px;">
+            <div onclick="toggleCdArchive()" style="cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                <span id="cdArchiveArrow" style="transition:transform 0.2s;display:inline-block;">&#9654;</span>
+                <h3 style="color:var(--text-secondary);font-size:15px;font-weight:600;margin:0;">Archive (${archivedItems.length})</h3>
+            </div>
+            <div id="cdArchiveList" style="display:none;flex-direction:column;gap:12px;">`;
+        archivedItems.forEach(item => { html += renderCdCard(item); });
         html += `</div></div>`;
     }
 
     container.innerHTML = html;
+}
+
+function toggleCdArchive() {
+    const list = document.getElementById('cdArchiveList');
+    const arrow = document.getElementById('cdArchiveArrow');
+    if (list.style.display === 'none') {
+        list.style.display = 'flex';
+        arrow.style.transform = 'rotate(90deg)';
+    } else {
+        list.style.display = 'none';
+        arrow.style.transform = 'rotate(0deg)';
+    }
+}
+
+async function archiveCdItem(id) {
+    await fetch('/api/content-development/' + id, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: 'Archived'})
+    });
+    const item = cdData.find(d => d.id === id);
+    if (item) item.status = 'Archived';
+    filterContentDev();
+    showToast('Moved to archive');
 }
 
 function escapeHtml(str) {
