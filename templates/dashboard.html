@@ -955,6 +955,7 @@
                     <option value="Published">Published</option>
                     <option value="Archived">Archived</option>
                 </select>
+                <button class="btn btn-primary" onclick="openCdModal()">+ Add Content</button>
                 <label class="btn btn-primary" style="cursor:pointer;margin:0;">
                     Upload CSV
                     <input type="file" accept=".csv" onchange="uploadContentDevCSV(this)" style="display:none;">
@@ -968,6 +969,69 @@
         <div id="cdSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;"></div>
         <!-- Content cards -->
         <div id="cdCards" style="display:flex;flex-direction:column;gap:16px;"></div>
+
+        <!-- Add / Edit Content Modal -->
+        <div id="cdModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:flex-start;justify-content:center;overflow-y:auto;padding:40px 16px;">
+            <div style="background:var(--bg-card);border-radius:16px;padding:28px;max-width:700px;width:100%;border:1px solid var(--border);margin:auto;">
+                <h3 id="cdModalTitle" style="color:var(--text-primary);margin-bottom:20px;font-size:18px;">Add Content</h3>
+                <input type="hidden" id="cdEditId" value="">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+                    <div>
+                        <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block;font-weight:600;">Month / Week</label>
+                        <input type="text" id="cdFieldWeek" placeholder="e.g. April W1" style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid var(--border);font-size:14px;box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block;font-weight:600;">Content Type</label>
+                        <select id="cdFieldType" style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid var(--border);font-size:14px;box-sizing:border-box;">
+                            <option value="Reel">Reel</option>
+                            <option value="Carousel">Carousel</option>
+                            <option value="Story">Story</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+                    <div>
+                        <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block;font-weight:600;">Content Piece</label>
+                        <input type="text" id="cdFieldPiece" placeholder="e.g. Reel 15" style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid var(--border);font-size:14px;box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block;font-weight:600;">Content Pillar</label>
+                        <input type="text" id="cdFieldPillar" placeholder="e.g. Educational, BTS" style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid var(--border);font-size:14px;box-sizing:border-box;">
+                    </div>
+                </div>
+                <div style="margin-bottom:12px;">
+                    <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block;font-weight:600;">Script / On-Screen Text</label>
+                    <textarea id="cdFieldScript" rows="6" placeholder="Write the full script or on-screen copy here..." style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid var(--border);font-size:14px;box-sizing:border-box;resize:vertical;line-height:1.5;"></textarea>
+                </div>
+                <div style="margin-bottom:12px;">
+                    <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block;font-weight:600;">B-Roll</label>
+                    <input type="text" id="cdFieldBRoll" placeholder="B-Roll notes..." style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid var(--border);font-size:14px;box-sizing:border-box;">
+                </div>
+                <div style="margin-bottom:12px;">
+                    <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block;font-weight:600;">Caption Hook / Info</label>
+                    <textarea id="cdFieldCaption" rows="3" placeholder="Caption or hook text..." style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid var(--border);font-size:14px;box-sizing:border-box;resize:vertical;"></textarea>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+                    <div>
+                        <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block;font-weight:600;">Notes</label>
+                        <input type="text" id="cdFieldNotes" placeholder="Any production notes..." style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid var(--border);font-size:14px;box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block;font-weight:600;">Status</label>
+                        <select id="cdFieldStatus" style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid var(--border);font-size:14px;box-sizing:border-box;">
+                            <option value="In Progress">In Progress</option>
+                            <option value="In Review">In Review</option>
+                            <option value="Approved">Approved</option>
+                            <option value="Published">Published</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">
+                    <button class="btn" onclick="closeCdModal()" style="background:var(--bg-hover);color:var(--text-secondary);padding:10px 20px;">Cancel</button>
+                    <button class="btn btn-primary" onclick="submitCdModal()" style="padding:10px 20px;">Save</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- ═══ B-ROLL IDEAS PAGE ═══ -->
@@ -2503,7 +2567,8 @@ function renderCdCard(item) {
                         <option value="Approved" ${item.status === 'Approved' ? 'selected' : ''}>Approved</option>
                         <option value="Published" ${item.status === 'Published' ? 'selected' : ''}>Published</option>
                     </select>
-                    <button onclick="archiveCdItem(${item.id})" style="background:none;border:1px solid var(--red);border-radius:6px;color:var(--red);cursor:pointer;font-size:12px;padding:4px 8px;display:flex;align-items:center;gap:4px;" title="Archive">🗑 Archive</button>`
+                    <button onclick="openCdEditModal(${item.id})" style="background:none;border:1px solid var(--accent-primary);border-radius:6px;color:var(--accent-primary);cursor:pointer;font-size:12px;padding:4px 8px;" title="Edit">Edit</button>
+                    <button onclick="archiveCdItem(${item.id})" style="background:none;border:1px solid var(--red);border-radius:6px;color:var(--red);cursor:pointer;font-size:12px;padding:4px 8px;display:flex;align-items:center;gap:4px;" title="Archive">🗑</button>`
                 }
             </div>
         </div>`;
@@ -2613,6 +2678,81 @@ async function archiveCdItem(id) {
     if (item) item.status = 'Archived';
     filterContentDev();
     showToast('Moved to archive');
+}
+
+// ─── Add / Edit Content Modal ───
+function clearCdModal() {
+    document.getElementById('cdEditId').value = '';
+    document.getElementById('cdFieldWeek').value = '';
+    document.getElementById('cdFieldType').value = 'Reel';
+    document.getElementById('cdFieldPiece').value = '';
+    document.getElementById('cdFieldPillar').value = '';
+    document.getElementById('cdFieldScript').value = '';
+    document.getElementById('cdFieldBRoll').value = '';
+    document.getElementById('cdFieldCaption').value = '';
+    document.getElementById('cdFieldNotes').value = '';
+    document.getElementById('cdFieldStatus').value = 'In Progress';
+}
+
+function openCdModal() {
+    clearCdModal();
+    document.getElementById('cdModalTitle').textContent = 'Add Content';
+    document.getElementById('cdModal').style.display = 'flex';
+}
+
+function openCdEditModal(id) {
+    const item = cdData.find(d => d.id === id);
+    if (!item) return;
+    document.getElementById('cdEditId').value = id;
+    document.getElementById('cdFieldWeek').value = item.month_week || '';
+    document.getElementById('cdFieldType').value = item.content_type || 'Reel';
+    document.getElementById('cdFieldPiece').value = item.content_piece || '';
+    document.getElementById('cdFieldPillar').value = item.content_pillar || '';
+    document.getElementById('cdFieldScript').value = item.on_screen_text || '';
+    document.getElementById('cdFieldBRoll').value = item.b_roll || '';
+    document.getElementById('cdFieldCaption').value = item.caption_hook || '';
+    document.getElementById('cdFieldNotes').value = item.notes || '';
+    document.getElementById('cdFieldStatus').value = item.status || 'In Progress';
+    document.getElementById('cdModalTitle').textContent = 'Edit Content';
+    document.getElementById('cdModal').style.display = 'flex';
+}
+
+function closeCdModal() {
+    document.getElementById('cdModal').style.display = 'none';
+}
+
+async function submitCdModal() {
+    const editId = document.getElementById('cdEditId').value;
+    const payload = {
+        month_week: document.getElementById('cdFieldWeek').value.trim(),
+        content_type: document.getElementById('cdFieldType').value,
+        content_piece: document.getElementById('cdFieldPiece').value.trim(),
+        content_pillar: document.getElementById('cdFieldPillar').value.trim(),
+        on_screen_text: document.getElementById('cdFieldScript').value,
+        b_roll: document.getElementById('cdFieldBRoll').value.trim(),
+        caption_hook: document.getElementById('cdFieldCaption').value,
+        notes: document.getElementById('cdFieldNotes').value.trim(),
+        status: document.getElementById('cdFieldStatus').value,
+    };
+    if (editId) {
+        // Update existing
+        await fetch('/api/content-development/' + editId, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        showToast('Content updated');
+    } else {
+        // Create new
+        await fetch('/api/content-development', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        showToast('Content added');
+    }
+    closeCdModal();
+    loadContentDev();
 }
 
 function escapeHtml(str) {
