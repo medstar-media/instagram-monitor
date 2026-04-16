@@ -1936,6 +1936,34 @@ def upload_content_development_csv():
     return jsonify({"ok": True, "imported": count})
 
 
+@app.route("/api/content-development/reseed", methods=["POST"])
+def reseed_content_development():
+    """Re-import content development from the bundled CSV file."""
+    import csv as _csv
+    csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "content_development.csv")
+    if not os.path.exists(csv_path):
+        return jsonify({"error": "No CSV file found"}), 404
+    conn = get_db()
+    conn.execute("DELETE FROM content_development")
+    with open(csv_path, "r", encoding="utf-8-sig") as f:
+        reader = _csv.DictReader(f)
+        count = 0
+        for row in reader:
+            conn.execute("""INSERT INTO content_development
+                (month_week, content_type, content_piece, b_roll, on_screen_text,
+                 notes, example_link, audio, caption_hook, format, content_pillar, status, feedback)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (row.get("Month/Week",""), row.get("Content Type",""), row.get("Content Piece",""),
+                 row.get("B-Roll",""), row.get("On-Screen Text / Copy",""), row.get("Notes",""),
+                 row.get("Example Link",""), row.get("Audio",""), row.get("Caption Hook/Info",""),
+                 row.get("Format",""), row.get("Content Pillar",""), row.get("Status","In Progress"),
+                 row.get("Feedback","")))
+            count += 1
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "imported": count})
+
+
 # ── B-Roll Ideas endpoints ───────────────────────────────────────────
 
 @app.route("/api/b-roll-ideas", methods=["GET"])
