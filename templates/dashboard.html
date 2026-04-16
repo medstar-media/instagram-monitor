@@ -1011,6 +1011,20 @@
                     <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block;font-weight:600;">Caption Hook / Info</label>
                     <textarea id="cdFieldCaption" rows="3" placeholder="Caption or hook text..." style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid var(--border);font-size:14px;box-sizing:border-box;resize:vertical;"></textarea>
                 </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;">
+                    <div>
+                        <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block;font-weight:600;">Example Link</label>
+                        <input type="text" id="cdFieldExampleLink" placeholder="https://..." style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid var(--border);font-size:14px;box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block;font-weight:600;">Audio</label>
+                        <input type="text" id="cdFieldAudio" placeholder="Audio/music notes..." style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid var(--border);font-size:14px;box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block;font-weight:600;">Format</label>
+                        <input type="text" id="cdFieldFormat" placeholder="e.g. Talking head, Voiceover" style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid var(--border);font-size:14px;box-sizing:border-box;">
+                    </div>
+                </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
                     <div>
                         <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block;font-weight:600;">Notes</label>
@@ -1025,6 +1039,14 @@
                             <option value="Published">Published</option>
                         </select>
                     </div>
+                </div>
+                <div style="margin-bottom:12px;">
+                    <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block;font-weight:600;">Feedback</label>
+                    <textarea id="cdFieldFeedback" rows="2" placeholder="Any feedback on this content..." style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid rgba(116,185,255,0.3);font-size:14px;box-sizing:border-box;resize:vertical;"></textarea>
+                </div>
+                <div style="margin-bottom:12px;">
+                    <label style="font-size:12px;color:#fdcb6e;margin-bottom:4px;display:block;font-weight:600;">Notes for Isis</label>
+                    <textarea id="cdFieldIsisNotes" rows="2" placeholder="Notes specifically for Isis..." style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid rgba(253,203,110,0.3);font-size:14px;box-sizing:border-box;resize:vertical;"></textarea>
                 </div>
                 <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">
                     <button class="btn" onclick="closeCdModal()" style="background:var(--bg-hover);color:var(--text-secondary);padding:10px 20px;">Cancel</button>
@@ -2602,10 +2624,36 @@ function renderCdCard(item) {
         </div>`;
     }
 
+    // Example Link, Audio, Format row
+    const hasLink = (item.example_link || '').length > 0;
+    const hasAudio = (item.audio || '').length > 0;
+    const hasFormat = (item.format || '').length > 0;
+    if (hasLink || hasAudio || hasFormat) {
+        html += `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px;">`;
+        if (hasLink) {
+            const linkHtml = escapeHtml(item.example_link).replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color:var(--accent-primary);text-decoration:underline;">View Example</a>');
+            html += `<div><span style="font-size:11px;text-transform:uppercase;color:var(--text-secondary);font-weight:600;">Example Link: </span><span style="font-size:13px;">${linkHtml}</span></div>`;
+        }
+        if (hasAudio) {
+            html += `<div><span style="font-size:11px;text-transform:uppercase;color:var(--text-secondary);font-weight:600;">Audio: </span><span style="font-size:13px;color:var(--text-secondary);">${escapeHtml(item.audio)}</span></div>`;
+        }
+        if (hasFormat) {
+            html += `<div><span style="font-size:11px;text-transform:uppercase;color:var(--text-secondary);font-weight:600;">Format: </span><span style="font-size:13px;color:var(--text-secondary);">${escapeHtml(item.format)}</span></div>`;
+        }
+        html += `</div>`;
+    }
+
     if (item.feedback) {
         html += `<div style="margin-top:8px;padding:8px 12px;border-radius:6px;background:rgba(116,185,255,0.08);border:1px solid rgba(116,185,255,0.2);">
             <span style="font-size:11px;text-transform:uppercase;color:#74b9ff;font-weight:600;">Feedback: </span>
             <span style="font-size:13px;color:var(--text-secondary);">${escapeHtml(item.feedback)}</span>
+        </div>`;
+    }
+
+    if (item.notes_for_isis) {
+        html += `<div style="margin-top:8px;padding:8px 12px;border-radius:6px;background:rgba(253,203,110,0.08);border:1px solid rgba(253,203,110,0.2);">
+            <span style="font-size:11px;text-transform:uppercase;color:#fdcb6e;font-weight:600;">Notes for Isis: </span>
+            <span style="font-size:13px;color:var(--text-secondary);">${escapeHtml(item.notes_for_isis)}</span>
         </div>`;
     }
 
@@ -2690,8 +2738,13 @@ function clearCdModal() {
     document.getElementById('cdFieldScript').value = '';
     document.getElementById('cdFieldBRoll').value = '';
     document.getElementById('cdFieldCaption').value = '';
+    document.getElementById('cdFieldExampleLink').value = '';
+    document.getElementById('cdFieldAudio').value = '';
+    document.getElementById('cdFieldFormat').value = '';
     document.getElementById('cdFieldNotes').value = '';
     document.getElementById('cdFieldStatus').value = 'In Progress';
+    document.getElementById('cdFieldFeedback').value = '';
+    document.getElementById('cdFieldIsisNotes').value = '';
 }
 
 function openCdModal() {
@@ -2711,8 +2764,13 @@ function openCdEditModal(id) {
     document.getElementById('cdFieldScript').value = item.on_screen_text || '';
     document.getElementById('cdFieldBRoll').value = item.b_roll || '';
     document.getElementById('cdFieldCaption').value = item.caption_hook || '';
+    document.getElementById('cdFieldExampleLink').value = item.example_link || '';
+    document.getElementById('cdFieldAudio').value = item.audio || '';
+    document.getElementById('cdFieldFormat').value = item.format || '';
     document.getElementById('cdFieldNotes').value = item.notes || '';
     document.getElementById('cdFieldStatus').value = item.status || 'In Progress';
+    document.getElementById('cdFieldFeedback').value = item.feedback || '';
+    document.getElementById('cdFieldIsisNotes').value = item.notes_for_isis || '';
     document.getElementById('cdModalTitle').textContent = 'Edit Content';
     document.getElementById('cdModal').style.display = 'flex';
 }
@@ -2731,8 +2789,13 @@ async function submitCdModal() {
         on_screen_text: document.getElementById('cdFieldScript').value,
         b_roll: document.getElementById('cdFieldBRoll').value.trim(),
         caption_hook: document.getElementById('cdFieldCaption').value,
+        example_link: document.getElementById('cdFieldExampleLink').value.trim(),
+        audio: document.getElementById('cdFieldAudio').value.trim(),
+        format: document.getElementById('cdFieldFormat').value.trim(),
         notes: document.getElementById('cdFieldNotes').value.trim(),
         status: document.getElementById('cdFieldStatus').value,
+        feedback: document.getElementById('cdFieldFeedback').value,
+        notes_for_isis: document.getElementById('cdFieldIsisNotes').value,
     };
     if (editId) {
         // Update existing

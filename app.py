@@ -1847,6 +1847,7 @@ def get_content_development():
             "content_pillar": r["content_pillar"],
             "status": r["status"],
             "feedback": r["feedback"],
+            "notes_for_isis": r["notes_for_isis"] if "notes_for_isis" in r.keys() else "",
         })
     return jsonify(items)
 
@@ -1858,7 +1859,8 @@ def update_content_development(item_id):
     conn = get_db()
     allowed = ["month_week", "content_type", "content_piece", "b_roll",
                "on_screen_text", "notes", "example_link", "audio",
-               "caption_hook", "format", "content_pillar", "status", "feedback"]
+               "caption_hook", "format", "content_pillar", "status", "feedback",
+               "notes_for_isis"]
     sets = []
     vals = []
     for k in allowed:
@@ -1891,13 +1893,13 @@ def add_content_development():
     conn = get_db()
     conn.execute("""INSERT INTO content_development
         (month_week, content_type, content_piece, b_roll, on_screen_text,
-         notes, example_link, audio, caption_hook, format, content_pillar, status, feedback)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+         notes, example_link, audio, caption_hook, format, content_pillar, status, feedback, notes_for_isis)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (data.get("month_week",""), data.get("content_type",""), data.get("content_piece",""),
          data.get("b_roll",""), data.get("on_screen_text",""), data.get("notes",""),
          data.get("example_link",""), data.get("audio",""), data.get("caption_hook",""),
          data.get("format",""), data.get("content_pillar",""), data.get("status","In Progress"),
-         data.get("feedback","")))
+         data.get("feedback",""), data.get("notes_for_isis","")))
     conn.commit()
     new_id = conn.execute("SELECT last_insert_rowid() as id").fetchone()["id"]
     conn.close()

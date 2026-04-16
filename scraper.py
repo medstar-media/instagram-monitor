@@ -179,6 +179,7 @@ def init_db():
             content_pillar TEXT DEFAULT '',
             status TEXT DEFAULT 'In Progress',
             feedback TEXT DEFAULT '',
+            notes_for_isis TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -216,6 +217,12 @@ def init_db():
     if "talking_points" not in cols:
         conn.execute("ALTER TABLE hook_ideas ADD COLUMN talking_points TEXT DEFAULT ''")
     conn.commit()
+
+    # ── Migrate content_development table if needed ──
+    cd_cols = [r["name"] for r in conn.execute("PRAGMA table_info(content_development)").fetchall()]
+    if cd_cols and "notes_for_isis" not in cd_cols:
+        conn.execute("ALTER TABLE content_development ADD COLUMN notes_for_isis TEXT DEFAULT ''")
+        conn.commit()
 
     # Seed the hashtag library if empty
     _seed_hashtag_library(conn)
