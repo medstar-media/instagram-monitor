@@ -601,8 +601,10 @@ def scrape_profile(username, max_posts=30):
     # ── Step 2: Extract posts from the same response ──
     timeline = user.get("edge_owner_to_timeline_media", {})
     edges = timeline.get("edges", [])
+    user_id = user.get("id", "")
     posts = []
 
+    # Parse edges from web_profile_info (legacy format)
     for edge in edges[:max_posts]:
         node = edge.get("node", {})
         likes = node.get("edge_liked_by", {}).get("count", 0)
@@ -646,10 +648,62 @@ def scrape_profile(username, max_posts=30):
             "hashtags": json.dumps(hashtags),
         })
 
-    # ── Step 3: If we need more posts, paginate ──
+    # ── Step 2b: If web_profile_info returned 0 posts, try feed API ──
+    if len(posts) == 0 and user_id:
+        print(f"[scraper] web_profile_info returned 0 edges for {username}, trying feed API...")
+        time.sleep(random.uniform(0.5, 1.5))
+        feed_url = f"https://www.instagram.com/api/v1/feed/user/{user_id}/?count={max_posts}"
+        try:
+            feed_resp = session.get(feed_url, timeout=15)
+            if feed_resp.status_code == 200:
+                feed_data = feed_resp.json()
+                items = feed_data.get("items", [])
+                print(f"[scraper] Feed API returned {len(items)} items for {username}")
+                for item in items[:max_posts]:
+                    likes = item.get("like_count", 0)
+                    comments = item.get("comment_count", 0)
+                    is_video = item.get("media_type") == 2
+                    is_carousel = item.get("media_type") == 8
+                    post_type = "carousel" if is_carousel else ("video" if is_video else "image")
+                    caption_obj = item.get("caption")
+                    caption = caption_obj.get("text", "") if caption_obj else ""
+                    hashtags = re.findall(r"#(\w+)", caption)
+                    ts = item.get("taken_at", 0)
+                    posted_at = datetime.utcfromtimestamp(ts).isoformat() if ts else ""
+                    engagement_rate = 0.0
+                    if follower_count > 0:
+                        engagement_rate = round(((likes + comments) / follower_count) * 100, 4)
+                    code = item.get("code", "")
+                    thumb = ""
+                    if item.get("image_versions2", {}).get("candidates"):
+                        thumb = item["image_versions2"]["candidates"][0].get("url", "")
+                    elif item.get("carousel_media") and len(item["carousel_media"]) > 0:
+                        first = item["carousel_media"][0]
+                        if first.get("image_versions2", {}).get("candidates"):
+                            thumb = first["image_versions2"]["candidates"][0].get("url", "")
+                    posts.append({
+                        "shortcode": code,
+                        "post_url": f"https://www.instagram.com/p/{code}/",
+                        "caption": caption,
+                        "post_type": post_type,
+                        "likes": likes,
+                        "comments": comments,
+                        "saves": 0,
+                        "video_views": item.get("play_count", item.get("view_count", 0)) if is_video else 0,
+                        "engagement_rate": engagement_rate,
+                        "posted_at": posted_at,
+                        "thumbnail_url": thumb,
+                        "is_video": is_video,
+                        "hashtags": json.dumps(hashtags),
+                    })
+            else:
+                print(f"[scraper] Feed API returned status {feed_resp.status_code} for {username}")
+        except Exception as e:
+            print(f"[scraper] Feed API error for {username}: {e}")
+
+    # ── Step 3: If we need more posts via GraphQL pagination (only if we got edges from step 2) ──
     has_next = timeline.get("page_info", {}).get("has_next_page", False)
     end_cursor = timeline.get("page_info", {}).get("end_cursor", "")
-    user_id = user.get("id", "")
 
     while has_next and len(posts) < max_posts and end_cursor and user_id:
         time.sleep(random.uniform(1.0, 2.5))
