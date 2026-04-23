@@ -953,6 +953,7 @@
                     <option value="In Review">In Review</option>
                     <option value="Approved">Approved</option>
                     <option value="Published">Published</option>
+                    <option value="Rejected">Rejected</option>
                     <option value="Archived">Archived</option>
                 </select>
                 <a href="https://canva.link/9k9dum2q655dji2" target="_blank" class="btn btn-primary" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;">🎨 Editing Styles Reference Sheet</a>
@@ -1038,6 +1039,7 @@
                             <option value="In Review">In Review</option>
                             <option value="Approved">Approved</option>
                             <option value="Published">Published</option>
+                            <option value="Rejected">Rejected</option>
                         </select>
                     </div>
                 </div>
@@ -2525,6 +2527,7 @@ function renderCdSummary(items) {
     const inRev = items.filter(d => d.status === 'In Review').length;
     const approved = items.filter(d => d.status === 'Approved').length;
     const published = items.filter(d => d.status === 'Published').length;
+    const rejected = items.filter(d => d.status === 'Rejected').length;
 
     document.getElementById('cdSummary').innerHTML = `
         <div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">Total Pieces</div></div>
@@ -2535,6 +2538,7 @@ function renderCdSummary(items) {
         <div class="stat-card"><div class="stat-value">${inRev}</div><div class="stat-label">In Review</div></div>
         <div class="stat-card"><div class="stat-value">${approved}</div><div class="stat-label">Approved</div></div>
         <div class="stat-card"><div class="stat-value">${published}</div><div class="stat-label">Published</div></div>
+        ${rejected > 0 ? `<div class="stat-card"><div class="stat-value" style="color:#d63031;">${rejected}</div><div class="stat-label">Rejected</div></div>` : ''}
     `;
 }
 
@@ -2544,6 +2548,7 @@ function getStatusColor(status) {
         case 'In Review': return '#74b9ff';
         case 'Approved': return '#00b894';
         case 'Published': return '#a29bfe';
+        case 'Rejected': return '#d63031';
         case 'Archived': return '#636e72';
         default: return '#636e72';
     }
@@ -2562,12 +2567,14 @@ function renderCdCard(item) {
     const statusCol = getStatusColor(item.status);
     const icon = getTypeIcon(item.content_type);
     const isArchived = item.status === 'Archived';
+    const isRejected = item.status === 'Rejected';
+    const isDimmed = isArchived || isRejected;
     const hasScript = (item.on_screen_text || '').length > 0;
     const hasBRoll = (item.b_roll || '').length > 0;
     const hasNotes = (item.notes || '').length > 0;
     const hasCaptionHook = (item.caption_hook || '').length > 0;
     const pillar = item.content_pillar || '';
-    const opacity = isArchived ? 'opacity:0.5;' : '';
+    const opacity = isDimmed ? 'opacity:0.5;' : '';
 
     let html = `<div class="stat-card" style="padding:16px;border-left:4px solid ${statusCol};${opacity}" id="cd-card-${item.id}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
@@ -2582,13 +2589,15 @@ function renderCdCard(item) {
                 </div>
             </div>
             <div style="display:flex;gap:6px;align-items:center;">
-                ${isArchived
-                    ? `<button onclick="updateCdStatus(${item.id}, 'In Progress')" style="padding:4px 10px;border-radius:6px;background:rgba(0,184,148,0.15);color:#00b894;border:1px solid #00b894;font-size:12px;font-weight:600;cursor:pointer;">Restore</button>`
+                ${isDimmed
+                    ? `<span style="font-size:12px;font-weight:600;color:${statusCol};margin-right:4px;">${isRejected ? '❌ Rejected' : '📦 Archived'}</span>
+                       <button onclick="updateCdStatus(${item.id}, 'In Progress')" style="padding:4px 10px;border-radius:6px;background:rgba(0,184,148,0.15);color:#00b894;border:1px solid #00b894;font-size:12px;font-weight:600;cursor:pointer;">Restore</button>`
                     : `<select onchange="updateCdStatus(${item.id}, this.value)" style="padding:4px 8px;border-radius:6px;background:rgba(${statusCol === '#fdcb6e' ? '253,203,110' : statusCol === '#74b9ff' ? '116,185,255' : statusCol === '#00b894' ? '0,184,148' : '162,155,254'},0.15);color:${statusCol};border:1px solid ${statusCol};font-size:12px;font-weight:600;cursor:pointer;">
                         <option value="In Progress" ${item.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
                         <option value="In Review" ${item.status === 'In Review' ? 'selected' : ''}>In Review</option>
                         <option value="Approved" ${item.status === 'Approved' ? 'selected' : ''}>Approved</option>
                         <option value="Published" ${item.status === 'Published' ? 'selected' : ''}>Published</option>
+                        <option value="Rejected" ${item.status === 'Rejected' ? 'selected' : ''}>Rejected</option>
                     </select>
                     <button onclick="openCdEditModal(${item.id})" style="background:none;border:1px solid var(--accent-primary);border-radius:6px;color:var(--accent-primary);cursor:pointer;font-size:12px;padding:4px 8px;" title="Edit">Edit</button>
                     <button onclick="archiveCdItem(${item.id})" style="background:none;border:1px solid var(--red);border-radius:6px;color:var(--red);cursor:pointer;font-size:12px;padding:4px 8px;display:flex;align-items:center;gap:4px;" title="Archive">🗑</button>`
@@ -2669,7 +2678,8 @@ function renderCdCards(items) {
         return;
     }
 
-    const activeItems = items.filter(i => i.status !== 'Archived');
+    const activeItems = items.filter(i => i.status !== 'Archived' && i.status !== 'Rejected');
+    const rejectedItems = items.filter(i => i.status === 'Rejected');
     const archivedItems = items.filter(i => i.status === 'Archived');
 
     let html = '';
@@ -2690,12 +2700,24 @@ function renderCdCards(items) {
         html += `</div></div>`;
     }
 
+    // Rejected section at bottom
+    if (rejectedItems.length > 0) {
+        html += `<div style="margin-top:24px;border-top:2px solid var(--border);padding-top:16px;">
+            <div onclick="toggleCdRejected()" style="cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                <span id="cdRejectedArrow" style="transition:transform 0.2s;display:inline-block;">&#9654;</span>
+                <h3 style="color:#d63031;font-size:15px;font-weight:600;margin:0;">❌ Rejected (${rejectedItems.length})</h3>
+            </div>
+            <div id="cdRejectedList" style="display:none;flex-direction:column;gap:12px;">`;
+        rejectedItems.forEach(item => { html += renderCdCard(item); });
+        html += `</div></div>`;
+    }
+
     // Archived section at bottom
     if (archivedItems.length > 0) {
         html += `<div style="margin-top:24px;border-top:2px solid var(--border);padding-top:16px;">
             <div onclick="toggleCdArchive()" style="cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:12px;">
                 <span id="cdArchiveArrow" style="transition:transform 0.2s;display:inline-block;">&#9654;</span>
-                <h3 style="color:var(--text-secondary);font-size:15px;font-weight:600;margin:0;">Archive (${archivedItems.length})</h3>
+                <h3 style="color:var(--text-secondary);font-size:15px;font-weight:600;margin:0;">📦 Archive (${archivedItems.length})</h3>
             </div>
             <div id="cdArchiveList" style="display:none;flex-direction:column;gap:12px;">`;
         archivedItems.forEach(item => { html += renderCdCard(item); });
@@ -2708,6 +2730,18 @@ function renderCdCards(items) {
 function toggleCdArchive() {
     const list = document.getElementById('cdArchiveList');
     const arrow = document.getElementById('cdArchiveArrow');
+    if (list.style.display === 'none') {
+        list.style.display = 'flex';
+        arrow.style.transform = 'rotate(90deg)';
+    } else {
+        list.style.display = 'none';
+        arrow.style.transform = 'rotate(0deg)';
+    }
+}
+
+function toggleCdRejected() {
+    const list = document.getElementById('cdRejectedList');
+    const arrow = document.getElementById('cdRejectedArrow');
     if (list.style.display === 'none') {
         list.style.display = 'flex';
         arrow.style.transform = 'rotate(90deg)';
