@@ -2348,23 +2348,17 @@ async function loadCarouselIdeas() {
         const isSaved = idea.status === 'saved';
         let slidesHtml = '';
         hooks.forEach((hook, i) => {
-            let headline = hook.hook_text || '';
-            if (headline.length > 80) {
-                const cut = headline.lastIndexOf(' ', 80);
-                headline = headline.substring(0, cut > 40 ? cut : 80) + '...';
-            }
-            slidesHtml += `<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 12px;background:var(--bg-primary);border-radius:8px;margin-bottom:4px;">
-                <span style="flex-shrink:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${isDeployed ? 'var(--green)' : 'var(--accent)'};color:#fff;font-size:11px;font-weight:700;">${i + 1}</span>
-                <span style="font-size:13px;color:var(--text-primary);line-height:1.4;">${headline}</span>
+            let fullText = hook.hook_text || '';
+            slidesHtml += `<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 14px;background:var(--bg-primary);border-radius:8px;margin-bottom:4px;">
+                <span style="flex-shrink:0;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${isDeployed ? 'var(--green)' : 'var(--accent)'};color:#fff;font-size:11px;font-weight:700;">${i + 1}</span>
+                <span style="font-size:13px;color:var(--text-primary);line-height:1.5;white-space:pre-wrap;">${fullText}</span>
             </div>`;
         });
 
         let captionHtml = '';
         if (idea.talking_points) {
-            const points = idea.talking_points.split('\n').filter(p => p.trim());
-            const brief = points.slice(0, 3).map(p => p.replace(/^[-•]\s*/, '').trim()).join(' · ');
-            captionHtml = `<div style="margin-top:8px;padding:8px 12px;background:rgba(108,92,231,0.08);border-radius:8px;font-size:12px;color:var(--accent-light);">
-                <span style="font-weight:600;">Caption notes:</span> ${brief}
+            captionHtml = `<div style="margin-top:8px;padding:10px 14px;background:rgba(108,92,231,0.08);border-radius:8px;font-size:13px;color:var(--accent-light);line-height:1.5;white-space:pre-wrap;">
+                <span style="font-weight:600;">Caption notes:</span>\n${idea.talking_points}
             </div>`;
         }
 
