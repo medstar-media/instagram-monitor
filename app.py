@@ -1273,6 +1273,136 @@ def add_custom_hook():
     return jsonify({"message": f"Hook added"})
 
 
+@app.route("/api/content-ideas", methods=["POST"])
+def add_single_content_idea():
+    """Add a single content idea with hooks manually."""
+    data = request.json
+    question = (data.get("question") or "").strip()
+    if not question:
+        return jsonify({"error": "Topic/question is required"}), 400
+
+    talking_points = (data.get("talking_points") or "").strip()
+    hooks_list = data.get("hooks", [])
+    status = data.get("status", "pending")
+    if status not in ("approved", "declined", "pending", "deployed", "saved", "video_made"):
+        status = "pending"
+
+    conn = get_db()
+    # Check for duplicates
+    existing = conn.execute("SELECT id FROM content_ideas WHERE question = ?", (question,)).fetchone()
+    if existing:
+        conn.close()
+        return jsonify({"error": "A topic with this question already exists"}), 409
+
+    cursor = conn.execute(
+        "INSERT INTO content_ideas (question, talking_points, status, sort_order) VALUES (?, ?, ?, 999)",
+        (question, talking_points, status)
+    )
+    idea_id = cursor.lastrowid
+
+    for idx, hook in enumerate(hooks_list):
+        hook_text = ""
+        category = "General"
+        if isinstance(hook, str):
+            hook_text = hook.strip()
+        elif isinstance(hook, dict):
+            hook_text = (hook.get("hook_text") or "").strip()
+            category = hook.get("category", "General")
+        if not hook_text:
+            continue
+        score = max(90 - idx * 10, 50)
+        conn.execute(
+            "INSERT INTO hook_ideas (hook_text, category, hook_score, content_idea_id, source_username, status) VALUES (?, ?, ?, ?, 'manual', 'pending')",
+            (hook_text, category, score, idea_id)
+        )
+
+    conn.commit()
+    conn.close()
+    return jsonify({"message": f"Topic added with {len(hooks_list)} hooks", "id": idea_id})
+
+
+@app.route("/api/content-ideas/csv-upload", methods=["POST"])
+def csv_upload_content_ideas():
+    """Upload a CSV file to bulk-import content ideas with hooks.
+    Expected CSV columns: question, hooks (pipe-separated), talking_points, status
+    """
+    import csv as _csv
+    import io
+
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+    file = request.files["file"]
+    if not file.filename:
+        return jsonify({"error": "No file selected"}), 400
+    if not file.filename.lower().endswith(".csv"):
+        return jsonify({"error": "Only CSV files are supported"}), 400
+
+    try:
+        content = file.read().decode("utf-8-sig")
+    except UnicodeDecodeError:
+        content = file.read().decode("latin-1")
+
+    reader = _csv.DictReader(io.StringIO(content))
+    conn = get_db()
+    added = 0
+    skipped = 0
+
+    for row_num, row in enumerate(reader, start=2):
+        row = {k.strip().lower().replace(" ", "_"): v.strip() if v else "" for k, v in row.items()}
+        question = row.get("question") or row.get("topic") or row.get("title") or ""
+        question = question.strip()
+        if not question:
+            skipped += 1
+            continue
+
+        existing = conn.execute("SELECT id FROM content_ideas WHERE question = ?", (question,)).fetchone()
+        if existing:
+            skipped += 1
+            continue
+
+        talking_points = row.get("talking_points") or row.get("notes") or ""
+        status_raw = (row.get("status") or "pending").strip().lower()
+        if status_raw in ("approved", "declined", "pending", "deployed", "saved", "video_made", "done"):
+            idea_status = "approved" if status_raw == "done" else status_raw
+        else:
+            idea_status = "pending"
+
+        hooks_raw = row.get("hooks") or row.get("hook") or ""
+        cursor = conn.execute(
+            "INSERT INTO content_ideas (question, talking_points, status, sort_order) VALUES (?, ?, ?, 999)",
+            (question, talking_points, idea_status)
+        )
+        idea_id = cursor.lastrowid
+
+        if hooks_raw:
+            hook_parts = [h.strip() for h in hooks_raw.replace("\n", "|").split("|") if h.strip()]
+            for idx, hook_text in enumerate(hook_parts):
+                if len(hook_text) < 5:
+                    continue
+                hl = hook_text.lower()
+                if any(w in hl for w in ["how to", "here's how", "step", "guide", "tip"]):
+                    cat = "How-To / Educational"
+                elif any(w in hl for w in ["?", "what if", "did you know", "why"]):
+                    cat = "Question / Curiosity"
+                elif any(w in hl for w in ["most people", "nobody", "everyone", "stop", "don't"]):
+                    cat = "Contrarian / Bold"
+                elif any(w in hl for w in ["result", "before", "after", "transform", "increase", "%"]):
+                    cat = "Results / Proof"
+                else:
+                    cat = "General"
+                score = max(90 - idx * 10, 50)
+                conn.execute(
+                    "INSERT INTO hook_ideas (hook_text, category, hook_score, content_idea_id, source_username, status) VALUES (?, ?, ?, ?, 'csv-upload', 'pending')",
+                    (hook_text, cat, score, idea_id)
+                )
+
+        added += 1
+
+    conn.commit()
+    conn.close()
+    return jsonify({"message": f"Imported {added} topics ({skipped} skipped as duplicates or empty)", "added": added, "skipped": skipped})
+
+
 @app.route("/api/ad-recommendations", methods=["GET"])
 def get_ad_recommendations():
     """Recommend posts that Medstar Media should boost with paid ads.
