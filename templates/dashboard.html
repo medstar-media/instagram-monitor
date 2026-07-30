@@ -800,7 +800,11 @@
     <div class="page-section" id="page-hook-ideas">
         <div class="page-header">
             <h2>Chris's Hook Ideas</h2>
-            <button class="btn btn-primary" onclick="generateHookIdeas()">⚡ Generate from Scraped Posts</button>
+            <div style="display:flex;gap:8px;">
+                <button class="btn btn-secondary" onclick="openAddTopicModal()">➕ Add Topic</button>
+                <button class="btn btn-secondary" onclick="openCsvUploadModal()">📥 Upload CSV</button>
+                <button class="btn btn-primary" onclick="generateHookIdeas()">⚡ Generate from Scraped Posts</button>
+            </div>
         </div>
         <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 14px;">
             Content topics with hooks and talking points. Approve the ones you want to produce, decline to remove.
@@ -1208,6 +1212,50 @@
         </div>
     </div>
 </div>
+
+
+    <!-- Add Topic Modal -->
+    <div id="addTopicModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:10000;justify-content:center;align-items:center;">
+        <div style="background:#1e1e2e;border-radius:16px;padding:32px;width:90%;max-width:520px;max-height:80vh;overflow-y:auto;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <h3 style="color:#fff;margin:0;">➕ Add New Topic</h3>
+                <button onclick="closeAddTopicModal()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;">&times;</button>
+            </div>
+            <div style="margin-bottom:16px;">
+                <label style="color:#ccc;font-size:13px;display:block;margin-bottom:6px;">Topic / Question *</label>
+                <input id="newTopicQuestion" type="text" placeholder="e.g. What's the best age for Botox?" style="width:100%;padding:10px 12px;background:#2a2a3e;border:1px solid #3a3a5e;border-radius:8px;color:#fff;font-size:14px;box-sizing:border-box;">
+            </div>
+            <div style="margin-bottom:16px;">
+                <label style="color:#ccc;font-size:13px;display:block;margin-bottom:6px;">Hook Ideas (one per line)</label>
+                <textarea id="newTopicHooks" rows="4" placeholder="Hook idea 1&#10;Hook idea 2&#10;Hook idea 3" style="width:100%;padding:10px 12px;background:#2a2a3e;border:1px solid #3a3a5e;border-radius:8px;color:#fff;font-size:14px;resize:vertical;box-sizing:border-box;"></textarea>
+            </div>
+            <div style="margin-bottom:20px;">
+                <label style="color:#ccc;font-size:13px;display:block;margin-bottom:6px;">Talking Points</label>
+                <textarea id="newTopicTalkingPoints" rows="3" placeholder="Key points to cover..." style="width:100%;padding:10px 12px;background:#2a2a3e;border:1px solid #3a3a5e;border-radius:8px;color:#fff;font-size:14px;resize:vertical;box-sizing:border-box;"></textarea>
+            </div>
+            <button onclick="submitNewTopic()" class="btn btn-primary" style="width:100%;">Add Topic</button>
+        </div>
+    </div>
+
+    <!-- CSV Upload Modal -->
+    <div id="csvUploadModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:10000;justify-content:center;align-items:center;">
+        <div style="background:#1e1e2e;border-radius:16px;padding:32px;width:90%;max-width:520px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <h3 style="color:#fff;margin:0;">📥 Upload CSV</h3>
+                <button onclick="closeCsvUploadModal()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;">&times;</button>
+            </div>
+            <div style="margin-bottom:16px;">
+                <label style="color:#ccc;font-size:13px;display:block;margin-bottom:6px;">Select CSV File</label>
+                <input id="csvFileInput" type="file" accept=".csv" style="width:100%;padding:10px;background:#2a2a3e;border:1px solid #3a3a5e;border-radius:8px;color:#fff;font-size:14px;box-sizing:border-box;">
+            </div>
+            <div style="background:#2a2a3e;border-radius:8px;padding:12px;margin-bottom:20px;">
+                <p style="color:#aaa;font-size:12px;margin:0 0 8px 0;"><strong style="color:#ccc;">Expected CSV format:</strong></p>
+                <code style="color:#6c5ce7;font-size:11px;">question, hooks, talking_points, status</code>
+                <p style="color:#888;font-size:11px;margin:8px 0 0 0;">Hooks can be pipe-separated: hook1 | hook2 | hook3</p>
+            </div>
+            <button onclick="submitCsvUpload()" class="btn btn-primary" style="width:100%;">Upload &amp; Import</button>
+        </div>
+    </div>
 
 <script>
 // ─── State ───
@@ -3246,6 +3294,61 @@ document.addEventListener('DOMContentLoaded', () => {
     loadOverview();
     loadProfiles(); // pre-populate filter dropdown
 });
+
+
+    // ——— Add Topic Modal ———
+    function openAddTopicModal() {
+        document.getElementById('addTopicModal').style.display = 'flex';
+    }
+    function closeAddTopicModal() {
+        document.getElementById('addTopicModal').style.display = 'none';
+        document.getElementById('newTopicQuestion').value = '';
+        document.getElementById('newTopicHooks').value = '';
+        document.getElementById('newTopicTalkingPoints').value = '';
+    }
+    async function submitNewTopic() {
+        const question = document.getElementById('newTopicQuestion').value.trim();
+        if (!question) { alert('Please enter a topic/question'); return; }
+        const hooksRaw = document.getElementById('newTopicHooks').value.trim();
+        const hooks = hooksRaw ? hooksRaw.split('\n').filter(h => h.trim()) : [];
+        const talkingPoints = document.getElementById('newTopicTalkingPoints').value.trim();
+        try {
+            const res = await api('/api/content-ideas', {
+                method: 'POST',
+                body: { question, hooks, talking_points: talkingPoints }
+            });
+            if (res.error) { alert(res.error); return; }
+            closeAddTopicModal();
+            loadHookIdeas();
+            showToast(res.message || 'Topic added!');
+        } catch (e) { alert('Error: ' + e.message); }
+    }
+
+    // ——— CSV Upload Modal ———
+    function openCsvUploadModal() {
+        document.getElementById('csvUploadModal').style.display = 'flex';
+    }
+    function closeCsvUploadModal() {
+        document.getElementById('csvUploadModal').style.display = 'none';
+        document.getElementById('csvFileInput').value = '';
+    }
+    async function submitCsvUpload() {
+        const fileInput = document.getElementById('csvFileInput');
+        if (!fileInput.files.length) { alert('Please select a CSV file'); return; }
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        try {
+            const res = await fetch('/api/content-ideas/csv-upload', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            if (data.error) { alert(data.error); return; }
+            closeCsvUploadModal();
+            loadHookIdeas();
+            showToast(data.message || 'CSV imported!');
+        } catch (e) { alert('Error: ' + e.message); }
+    }
 </script>
 </body>
 </html>
