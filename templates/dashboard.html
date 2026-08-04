@@ -27,6 +27,28 @@
             --shadow: 0 4px 24px rgba(0,0,0,0.3);
         }
 
+        [data-theme="light"] {
+            --bg-primary: #f5f6fa;
+            --bg-secondary: #ffffff;
+            --bg-card: #ffffff;
+            --bg-hover: #f0f1f5;
+            --bg-main: #f5f6fa;
+            --accent: #6c5ce7;
+            --accent-light: #6c5ce7;
+            --accent-glow: rgba(108, 92, 231, 0.15);
+            --green: #00b894;
+            --green-glow: rgba(0, 184, 148, 0.15);
+            --red: #d63031;
+            --orange: #e17055;
+            --pink: #e84393;
+            --text-primary: #2d3436;
+            --text-secondary: #636e72;
+            --text-muted: #b2bec3;
+            --border: #dfe6e9;
+            --radius: 12px;
+            --shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
@@ -452,15 +474,15 @@
         <div class="nav-item" onclick="showPage('growth')">
             <span class="nav-icon">📈</span> <span>Growth Tips</span>
         </div>
-        <div class="nav-item" onclick="showPage('ad-recs')">
+        <!-- <div class="nav-item" onclick="showPage('ad-recs')">
             <span class="nav-icon">💰</span> <span>Ad Picks</span>
-        </div>
+        </div> -->
         <div class="nav-item" onclick="showPage('hook-ideas')">
             <span class="nav-icon">🪝</span> <span>Chris's Hook Ideas</span>
         </div>
-        <div class="nav-item" onclick="showPage('carousel-ideas')">
+        <!-- <div class="nav-item" onclick="showPage('carousel-ideas')">
             <span class="nav-icon">🎠</span> <span>Carousel Ideas</span>
-        </div>
+        </div> -->
         <div class="nav-item" onclick="showPage('medstar-analytics')" style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px;">
             <span class="nav-icon">📊</span> <span>Medstar Analytics</span>
         </div>
@@ -477,6 +499,14 @@
             <span class="nav-icon">👤</span> <span>Team</span>
         </div>
     </div>
+        <div style="padding:8px 12px;display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:13px;color:var(--text-secondary);">☀️ Light Mode</span>
+            <label style="position:relative;display:inline-block;width:40px;height:22px;cursor:pointer;">
+                <input type="checkbox" id="themeToggle" onchange="toggleTheme()" style="opacity:0;width:0;height:0;">
+                <span style="position:absolute;top:0;left:0;right:0;bottom:0;background:var(--bg-hover);border-radius:22px;transition:0.3s;border:1px solid var(--border);"></span>
+                <span id="themeSlider" style="position:absolute;top:2px;left:2px;width:16px;height:16px;background:var(--accent);border-radius:50%;transition:0.3s;"></span>
+            </label>
+        </div>
     <div style="padding:12px;border-top:1px solid var(--border);">
         <a href="/bookmarklet" style="display:flex;align-items:center;gap:8px;padding:10px 12px;color:var(--accent-light);text-decoration:none;font-size:13px;border-radius:8px;background:var(--bg-card);transition:background 0.2s;margin-bottom:8px;" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='var(--bg-card)'">
             <span>🔖</span> <span>Get Scraper Tool</span>
@@ -515,6 +545,8 @@
                     <option value="Lifestyle">Lifestyle</option>
                     <option value="Education">Education</option>
                     <option value="Competitor">Competitor</option>
+                    <option value="Static Image">Static Image</option>
+                    <option value="Graphic">Graphic</option>
                 </select>
             </div>
             <div style="display: flex; gap: 8px; justify-content: flex-end;">
@@ -608,10 +640,10 @@
             </select>
             <select id="topDays" onchange="loadTopPosts()">
                 <option value="7">Last 7 Days</option>
-                <option value="30" selected>Last 30 Days</option>
+                <option value="30">Last 30 Days</option>
                 <option value="90">Last 90 Days</option>
                 <option value="365">Last Year</option>
-                <option value="3650">All Time</option>
+                <option value="3650" selected>All Time</option>
             </select>
             <select id="topLimit" onchange="loadTopPosts()">
                 <option value="20">Top 20</option>
@@ -637,10 +669,10 @@
         <div class="filters-bar">
             <select id="hookDays" onchange="loadHooks()">
                 <option value="7">Last 7 Days</option>
-                <option value="30" selected>Last 30 Days</option>
+                <option value="30">Last 30 Days</option>
                 <option value="90">Last 90 Days</option>
                 <option value="365">Last Year</option>
-                <option value="3650">All Time</option>
+                <option value="3650" selected>All Time</option>
             </select>
         </div>
         <div class="panel">
@@ -950,6 +982,8 @@
                     <option value="Reel">Reels</option>
                     <option value="Carousel">Carousels</option>
                     <option value="Story">Stories</option>
+                    <option value="Static Image">Static Images</option>
+                    <option value="Graphic">Graphics</option>
                 </select>
                 <select id="cdFilterStatus" onchange="filterContentDev()" style="padding:8px 12px;border-radius:8px;background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);font-size:13px;">
                     <option value="">All Statuses</option>
@@ -983,8 +1017,8 @@
                 <input type="hidden" id="cdEditId" value="">
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
                     <div>
-                        <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block;font-weight:600;">Month / Week</label>
-                        <input type="text" id="cdFieldWeek" placeholder="e.g. April W1" style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid var(--border);font-size:14px;box-sizing:border-box;">
+                        <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block;font-weight:600;">Posting Date</label>
+                        <input type="text" id="cdFieldWeek" placeholder="e.g. 08/15/2026" style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid var(--border);font-size:14px;box-sizing:border-box;">
                     </div>
                     <div>
                         <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block;font-weight:600;">Content Type</label>
@@ -998,7 +1032,7 @@
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
                     <div>
                         <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block;font-weight:600;">Content Piece</label>
-                        <input type="text" id="cdFieldPiece" placeholder="e.g. Reel 15" style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid var(--border);font-size:14px;box-sizing:border-box;">
+                        <input type="text" id="cdFieldPiece" placeholder="e.g. Summer Glow Tips" style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid var(--border);font-size:14px;box-sizing:border-box;">
                     </div>
                     <div>
                         <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block;font-weight:600;">Content Pillar</label>
@@ -1284,7 +1318,7 @@ function showPage(page) {
     document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.getElementById('page-' + page).classList.add('active');
-    const pages = ['overview','top-posts','hooks','profiles','all-posts','hashtags','timing','growth','ad-recs','hook-ideas','carousel-ideas','medstar-analytics','content-dev','b-roll','industry-tags','team'];
+    const pages = ['overview','top-posts','hooks','profiles','all-posts','hashtags','timing','growth','hook-ideas','medstar-analytics','content-dev','b-roll','industry-tags','team'];
     const idx = pages.indexOf(page);
     if (idx >= 0) document.querySelectorAll('.nav-item')[idx].classList.add('active');
     currentPage = page;
@@ -1577,7 +1611,7 @@ function renderPostsTable(posts, compact = false) {
             <td class="metric" style="color:var(--orange)">${saves > 0 ? formatNumber(saves) : '-'}</td>
             <td><span class="ratio-badge">${lcRatio}</span></td>
             ${!compact ? `<td class="metric">${p.is_video ? formatNumber(p.video_views) : '-'}</td>` : ''}
-            <td class="metric ${engagementColor(p.engagement_rate)}">${p.engagement_rate.toFixed(2)}%</td>
+            <td class="metric ${engagementColor(p.engagement_rate)}">${(p.engagement_rate || 0).toFixed(2)}%</td>
             <td style="color: var(--text-secondary); font-size: 12px">${timeAgo(p.posted_at)}</td>
             <td><a href="${p.post_url}" target="_blank" class="link">View ↗</a></td>
         </tr>`;
@@ -1614,7 +1648,7 @@ async function loadHooks() {
             <td style="color: var(--text-muted)">${i + 1}</td>
             <td><div class="hook-text" style="max-width:400px">${truncate(h.hook, 120)}</div></td>
             <td><div class="profile-name">@${h.username}</div><div class="profile-handle">${formatNumber(h.follower_count)} followers</div></td>
-            <td class="metric ${engagementColor(h.engagement_rate)}">${h.engagement_rate.toFixed(2)}%</td>
+            <td class="metric ${engagementColor(h.engagement_rate)}">${(h.engagement_rate || 0).toFixed(2)}%</td>
             <td class="metric">${formatNumber(h.likes)}</td>
             <td>${typeBadge(h.post_type)}</td>
             <td><a href="${h.post_url}" target="_blank" class="link">View ↗</a></td>
@@ -2565,6 +2599,8 @@ function renderCdSummary(items) {
     const reels = items.filter(d => d.content_type === 'Reel').length;
     const carousels = items.filter(d => d.content_type === 'Carousel').length;
     const stories = items.filter(d => d.content_type === 'Story').length;
+        const staticImages = items.filter(d => d.content_type === 'Static Image').length;
+        const graphics = items.filter(d => d.content_type === 'Graphic').length;
     const inProg = items.filter(d => d.status === 'In Progress').length;
     const inRev = items.filter(d => d.status === 'In Review').length;
     const approved = items.filter(d => d.status === 'Approved').length;
@@ -2575,7 +2611,9 @@ function renderCdSummary(items) {
         <div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">Total Pieces</div></div>
         <div class="stat-card"><div class="stat-value">${reels}</div><div class="stat-label">Reels</div></div>
         <div class="stat-card"><div class="stat-value">${carousels}</div><div class="stat-label">Carousels</div></div>
-        <div class="stat-card"><div class="stat-value">${stories}</div><div class="stat-label">Stories</div></div>
+        <div class="stat-card"><div class="stat-value">${stories}</div>
+            <div class="stat-card"><div class="stat-value" style="color:var(--accent);">${staticImages}</div><div class="stat-label">Static Images</div></div>
+            <div class="stat-card"><div class="stat-value" style="color:var(--pink);">${graphics}</div><div class="stat-label">Graphics</div></div><div class="stat-label">Stories</div></div>
         <div class="stat-card"><div class="stat-value">${inProg}</div><div class="stat-label">In Progress</div></div>
         <div class="stat-card"><div class="stat-value">${inRev}</div><div class="stat-label">In Review</div></div>
         <div class="stat-card"><div class="stat-value">${approved}</div><div class="stat-label">Approved</div></div>
@@ -2601,7 +2639,9 @@ function getTypeIcon(type) {
         case 'Reel': return '🎬';
         case 'Carousel': return '📸';
         case 'Story': return '📱';
-        default: return '📄';
+        case 'Static Image': return '🖼️';
+            case 'Graphic': return '🎨';
+            default: return '📄';
     }
 }
 
@@ -3349,6 +3389,34 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast(data.message || 'CSV imported!');
         } catch (e) { alert('Error: ' + e.message); }
     }
-</script>
+
+    function toggleTheme() {
+        const html = document.documentElement;
+        const toggle = document.getElementById('themeToggle');
+        const slider = document.getElementById('themeSlider');
+        if (toggle.checked) {
+            html.setAttribute('data-theme', 'light');
+            slider.style.transform = 'translateX(18px)';
+            localStorage.setItem('theme', 'light');
+        } else {
+            html.removeAttribute('data-theme');
+            slider.style.transform = 'translateX(0)';
+            localStorage.setItem('theme', 'dark');
+        }
+    }
+
+    (function() {
+        const saved = localStorage.getItem('theme');
+        if (saved === 'light') {
+            document.documentElement.setAttribute('data-theme', 'light');
+            setTimeout(() => {
+                const toggle = document.getElementById('themeToggle');
+                const slider = document.getElementById('themeSlider');
+                if (toggle) { toggle.checked = true; slider.style.transform = 'translateX(18px)'; }
+            }, 0);
+        }
+    })();
+
+    </script>
 </body>
 </html>
