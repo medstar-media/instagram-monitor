@@ -973,7 +973,7 @@
             <h2>Content Development</h2>
             <div style="display:flex;gap:8px;align-items:center;">
                 <select id="cdFilterWeek" onchange="filterContentDev()" style="padding:8px 12px;border-radius:8px;background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);font-size:13px;">
-                    <option value="">All Weeks</option>
+                    <option value="">All Months</option>
                 </select>
                 <select id="cdFilterType" onchange="filterContentDev()" style="padding:8px 12px;border-radius:8px;background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);font-size:13px;">
                     <option value="">All Types</option>
@@ -2569,14 +2569,39 @@ async function loadContentDev() {
     filterContentDev();
 }
 
+function getCdMonth(dateStr) {
+    if (!dateStr) return 'Unscheduled';
+    const parts = dateStr.split('/');
+    if (parts.length >= 2) {
+        const monthNum = parseInt(parts[0]);
+        const year = parts.length >= 3 ? parts[2] : '';
+        const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        if (monthNum >= 1 && monthNum <= 12) {
+            return monthNames[monthNum - 1] + (year ? ' ' + year : '');
+        }
+    }
+    return dateStr;
+}
+
+
 function populateCdWeekFilter() {
     const sel = document.getElementById('cdFilterWeek');
-    const weeks = [...new Set(cdData.map(d => d.month_week).filter(Boolean))];
-    // keep first option
-    sel.innerHTML = '<option value="">All Weeks</option>';
-    weeks.forEach(w => {
-        sel.innerHTML += `<option value="${w}">${w}</option>`;
+    const months = [...new Set(cdData.map(d => getCdMonth(d.month_week)).filter(m => m !== 'Unscheduled'))];
+    // Sort months chronologically
+    months.sort((a, b) => {
+        const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const [mA, yA] = a.split(' ');
+        const [mB, yB] = b.split(' ');
+        return (parseInt(yA || 0) - parseInt(yB || 0)) || (monthNames.indexOf(mA) - monthNames.indexOf(mB));
     });
+    sel.innerHTML = '<option value="">All Months</option>';
+    months.forEach(m => {
+        sel.innerHTML += `<option value="${m}">${m}</option>`;
+    });
+    // Add Unscheduled if any items have no date
+    if (cdData.some(d => !d.month_week)) {
+        sel.innerHTML += '<option value="Unscheduled">Unscheduled</option>';
+    }
 }
 
 function filterContentDev() {
@@ -2584,7 +2609,7 @@ function filterContentDev() {
     const typeF = document.getElementById('cdFilterType').value;
     const statusF = document.getElementById('cdFilterStatus').value;
     let filtered = cdData;
-    if (weekF) filtered = filtered.filter(d => d.month_week === weekF);
+    if (weekF) filtered = filtered.filter(d => getCdMonth(d.month_week) === weekF);
     if (typeF) filtered = filtered.filter(d => d.content_type === typeF);
     if (statusF) filtered = filtered.filter(d => d.status === statusF);
     renderCdSummary(filtered);
@@ -2757,19 +2782,28 @@ function renderCdCards(items) {
 
     let html = '';
 
-    // Group active items by week
+    // Group active items by month
     const groups = {};
     activeItems.forEach(item => {
-        const key = item.month_week || 'Unscheduled';
+        const key = getCdMonth(item.month_week);
         if (!groups[key]) groups[key] = [];
         groups[key].push(item);
     });
 
-    for (const [week, weekItems] of Object.entries(groups)) {
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const sortedKeys = Object.keys(groups).sort((a, b) => {
+        if (a === 'Unscheduled') return 1;
+        if (b === 'Unscheduled') return -1;
+        const [mA, yA] = a.split(' ');
+        const [mB, yB] = b.split(' ');
+        return (parseInt(yA || 0) - parseInt(yB || 0)) || (monthNames.indexOf(mA) - monthNames.indexOf(mB));
+    });
+    for (const month of sortedKeys) {
+        const monthItems = groups[month];
         html += `<div style="margin-bottom:8px;">
-            <h3 style="color:var(--text-primary);font-size:16px;font-weight:600;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);">${week}</h3>
+            <h3 style="color:var(--text-primary);font-size:16px;font-weight:600;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);">${month}</h3>
             <div style="display:flex;flex-direction:column;gap:12px;">`;
-        weekItems.forEach(item => { html += renderCdCard(item); });
+        monthItems.forEach(item => { html += renderCdCard(item); });
         html += `</div></div>`;
     }
 
