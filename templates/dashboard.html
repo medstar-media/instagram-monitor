@@ -1085,10 +1085,7 @@
                     <label style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;display:block;font-weight:600;">Feedback</label>
                     <textarea id="cdFieldFeedback" rows="2" placeholder="Any feedback on this content..." style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid rgba(116,185,255,0.3);font-size:14px;box-sizing:border-box;resize:vertical;"></textarea>
                 </div>
-                <div style="margin-bottom:12px;">
-                    <label style="font-size:12px;color:#fdcb6e;margin-bottom:4px;display:block;font-weight:600;">Notes for Isis</label>
-                    <textarea id="cdFieldIsisNotes" rows="2" placeholder="Notes specifically for Isis..." style="width:100%;padding:10px;border-radius:8px;background:var(--bg-main);color:var(--text-primary);border:1px solid rgba(253,203,110,0.3);font-size:14px;box-sizing:border-box;resize:vertical;"></textarea>
-                </div>
+
                 <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">
                     <button class="btn" onclick="closeCdModal()" style="background:var(--bg-hover);color:var(--text-secondary);padding:10px 20px;">Cancel</button>
                     <button class="btn btn-primary" onclick="submitCdModal()" style="padding:10px 20px;">Save</button>
@@ -2742,10 +2739,7 @@ function renderCdCard(item) {
         </div>`;
     }
 
-    if (item.notes_for_isis) {
         html += `<div style="margin-top:8px;padding:8px 12px;border-radius:6px;background:rgba(253,203,110,0.08);border:1px solid rgba(253,203,110,0.2);">
-            <span style="font-size:11px;text-transform:uppercase;color:#fdcb6e;font-weight:600;">Notes for Isis: </span>
-            <span style="font-size:13px;color:var(--text-secondary);">${escapeHtml(item.notes_for_isis)}</span>
         </div>`;
     }
 
@@ -2861,7 +2855,6 @@ function clearCdModal() {
     document.getElementById('cdFieldNotes').value = '';
     document.getElementById('cdFieldStatus').value = 'In Progress';
     document.getElementById('cdFieldFeedback').value = '';
-    document.getElementById('cdFieldIsisNotes').value = '';
 }
 
 function openCdModal() {
@@ -2887,7 +2880,6 @@ function openCdEditModal(id) {
     document.getElementById('cdFieldNotes').value = item.notes || '';
     document.getElementById('cdFieldStatus').value = item.status || 'In Progress';
     document.getElementById('cdFieldFeedback').value = item.feedback || '';
-    document.getElementById('cdFieldIsisNotes').value = item.notes_for_isis || '';
     document.getElementById('cdModalTitle').textContent = 'Edit Content';
     document.getElementById('cdModal').style.display = 'flex';
 }
@@ -2912,7 +2904,6 @@ async function submitCdModal() {
         notes: document.getElementById('cdFieldNotes').value.trim(),
         status: document.getElementById('cdFieldStatus').value,
         feedback: document.getElementById('cdFieldFeedback').value,
-        notes_for_isis: document.getElementById('cdFieldIsisNotes').value,
     };
     if (editId) {
         // Update existing
