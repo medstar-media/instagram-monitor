@@ -991,6 +991,7 @@
                     <option value="Published">Published</option>
                     <option value="Rejected">Rejected</option>
                     <option value="Archived">Archived</option>
+                <option value="Feedback Provided">Feedback Provided</option>
                 </select>
                 <a href="https://canva.link/9k9dum2q655dji2" target="_blank" class="btn btn-primary" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;">🎨 Editing Styles Reference Sheet</a>
                 <button class="btn btn-primary" onclick="openCdModal()">+ Add Content</button>
@@ -1078,6 +1079,7 @@
                             <option value="Approved">Approved</option>
                             <option value="Published">Published</option>
                             <option value="Rejected">Rejected</option>
+                        <option value="Feedback Provided">Feedback Provided</option>
                         </select>
                     </div>
                 </div>
@@ -2665,6 +2667,7 @@ function getStatusColor(status) {
         case 'Published': return '#a29bfe';
         case 'Rejected': return '#d63031';
         case 'Archived': return '#636e72';
+        case 'Feedback Provided': return '#e17055';
         default: return '#636e72';
     }
 }
@@ -2715,6 +2718,7 @@ function renderCdCard(item) {
                         <option value="Approved" ${item.status === 'Approved' ? 'selected' : ''}>Approved</option>
                         <option value="Published" ${item.status === 'Published' ? 'selected' : ''}>Published</option>
                         <option value="Rejected" ${item.status === 'Rejected' ? 'selected' : ''}>Rejected</option>
+                        <option value="Feedback Provided" ${item.status === 'Feedback Provided' ? 'selected' : ''}>Feedback Provided</option>
                     </select>
                     <button onclick="openCdEditModal(${item.id})" style="background:none;border:1px solid var(--accent-primary);border-radius:6px;color:var(--accent-primary);cursor:pointer;font-size:12px;padding:4px 8px;" title="Edit">Edit</button>
                     <button onclick="archiveCdItem(${item.id})" style="background:none;border:1px solid var(--red);border-radius:6px;color:var(--red);cursor:pointer;font-size:12px;padding:4px 8px;display:flex;align-items:center;gap:4px;" title="Archive">🗑</button>`
